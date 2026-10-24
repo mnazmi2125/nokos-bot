@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+pm2_*.log
+*.tsbuildinfo
+.DS_Store
+.vscode/
+ui-references/
+PRD.md
