@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.gopay_cache.json
 *.log
 pm2_*.log
 *.tsbuildinfo

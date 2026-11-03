@@ -1,0 +1,4 @@
+Catatan / Temuan (mungkin perlu ditindaklanjuti)
+- Redis + BullMQ dari PRD belum dipakai — polling masih setInterval polos di satu proses.
+- Polling N+1: pollOnce memanggil getOrder per order aktif tiap 4 detik — bisa membebani jika banyak order bersamaan.
+- Menu utama menampilkan totalUser dengan query COUNT(*) FROM tb_users setiap render — tanpa cache.

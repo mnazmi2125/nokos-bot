@@ -13,6 +13,7 @@ export interface DbDeposit {
   status: DepositStatus;
   chat_id: number | null;
   message_id: number | null;
+  matched_tx_id: string | null;
   paid_at: string | null;
   created_at: string;
 }
@@ -26,9 +27,11 @@ export async function insertDeposit(d: {
   messageId?: number | null;
   ownerId?: number | null;
 }): Promise<number> {
+  // Urutan VALUES harus sejajar kolom: method='QRIS' literal, external_id=?
+  // (sebelumnya placeholder & literal tertukar → external_id selalu 'QRIS' → ER_DUP_ENTRY)
   const r = await qExec(
     `INSERT INTO tb_deposits (user_id, owner_id, amount, unique_code, method, external_id, status, chat_id, message_id)
-     VALUES (?, ?, ?, ?, ?, 'QRIS', 'PENDING', ?, ?)`,
+     VALUES (?, ?, ?, ?, 'QRIS', ?, 'PENDING', ?, ?)`,
     [d.userId, d.ownerId ?? null, d.amount, d.uniqueCode, d.externalId, d.chatId ?? null, d.messageId ?? null]
   );
   return r.insertId;

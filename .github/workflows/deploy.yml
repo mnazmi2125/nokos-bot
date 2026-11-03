@@ -16,9 +16,14 @@ jobs:
         id: cfg
         env:
           HOST: ${{ secrets.VPS_HOST }}
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          PASS: ${{ secrets.VPS_PASSWORD }}
         run: |
           if [ -z "$HOST" ]; then
             echo "VPS_HOST belum diatur di Secrets → deploy dilewati"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$KEY" ] && [ -z "$PASS" ]; then
+            echo "Isi salah satu: VPS_SSH_KEY (opsi SSH) atau VPS_PASSWORD (opsi password) → deploy dilewati"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -31,5 +36,6 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
           port: ${{ secrets.VPS_PORT || 22 }}
           script: cd "${{ secrets.VPS_PATH }}" && bash deploy/deploy.sh

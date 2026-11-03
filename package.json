@@ -13,7 +13,11 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "grammy": "^1.30.0",
+    "jpeg-js": "^0.4.4",
+    "jsqr": "^1.4.0",
+    "moment-timezone": "^0.6.6",
     "mysql2": "^3.24.6",
+    "pngjs": "^7.0.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

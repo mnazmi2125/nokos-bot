@@ -7,6 +7,7 @@ import { orderCardText, orderCardKb, depositPaidText, depositStatusText, backToM
 import { getPendingDeposits, markDeposit, DbDeposit } from "./db/deposits.js";
 import { creditOrderMargin } from "./db/resellers.js";
 import { getPgAdapter, DEPOSIT_EXPIRE_MIN } from "./pg/index.js";
+import { notifyOrder, notifyDeposit } from "./notify.js";
 
 const POLL_MS = 4_000;
 
@@ -96,10 +97,15 @@ async function editDepositCard(d: DbDeposit, text: string): Promise<void> {
   } catch {}
 }
 
+let depPolling = false;
+
 async function pollDeposits(): Promise<void> {
-  const pg = getPgAdapter();
-  if (pg.configError()) return;
-  const pending = await getPendingDeposits(botOwner);
+  if (depPolling) return; // cegah siklus tumpang tindih → kredit ganda
+  depPolling = true;
+  try {
+    const pg = getPgAdapter();
+    if (pg.configError()) return;
+    const pending = await getPendingDeposits(botOwner);
   for (const d of pending) {
     try {
       let status = await pg.getStatus(d.external_id);
@@ -127,19 +133,35 @@ async function pollDeposits(): Promise<void> {
             .catch(() => {});
         }
         console.log(`[deposit] id=${d.id} PAID Rp ${d.amount} → user ${d.user_id} via ${pg.name}`);
+        await notifyDeposit(botRef, d);
       } else {
         await markDeposit(d.id, status === "EXPIRED" ? "EXPIRED" : "FAILED");
-        await editDepositCard(d, depositStatusText(status === "EXPIRED" ? "EXPIRED" : "FAILED"));
+        const endText = depositStatusText(status === "EXPIRED" ? "EXPIRED" : "FAILED");
+        await editDepositCard(d, endText);
+        // Kirim pesan notifikasi khusus saat kedaluwarsa (edit caption tidak menimbulkan notifikasi)
+        if (status === "EXPIRED" && botRef && d.chat_id) {
+          await botRef.api
+            .sendMessage(d.chat_id, endText, { parse_mode: "Markdown" })
+            .catch(() => {});
+        }
         console.log(`[deposit] id=${d.id} ${status} (${pg.name})`);
       }
     } catch (e) {
       console.error(`[deposit] id=${d.id} gagal:`, (e as Error).message);
     }
   }
+  } finally {
+    depPolling = false;
+  }
 }
 
+let pollBusy = false;
+
 async function pollOnce(): Promise<void> {
-  const active = await getActiveOrders(botOwner);
+  if (pollBusy) return; // cegah siklus tumpang tindih → refund ganda
+  pollBusy = true;
+  try {
+    const active = await getActiveOrders(botOwner);
   for (const o of active) {
     try {
       if (isExpired(o.expires_at)) {
@@ -154,6 +176,7 @@ async function pollOnce(): Promise<void> {
         });
         await refreshOrderCard({ ...o, status: "OTP_RECEIVED", otp_code: po.otp_code });
         console.log(`[poll] order ${o.id} OTP masuk: ${po.otp_code}`);
+        await notifyOrder(botRef, o, po.otp_message ?? null);
       } else if (po.status === "EXPIRED") {
         await refundExpired(o);
       } else if (po.status === "CANCELED") {
@@ -167,6 +190,9 @@ async function pollOnce(): Promise<void> {
     } catch (e) {
       console.error(`[poll] order ${o.id} gagal:`, (e as Error).message);
     }
+  }
+  } finally {
+    pollBusy = false;
   }
 }
 

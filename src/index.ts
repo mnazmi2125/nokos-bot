@@ -91,6 +91,7 @@ import {
   setResellerStatus,
 } from "./db/resellers.js";
 import { getSetting } from "./db/settings.js";
+import { ttlCache } from "./cache.js";
 import { newBatchId, insertOrder, countUserOrders, getUserOrdersPaged } from "./db/orders.js";
 import {
   insertDeposit,
@@ -100,7 +101,7 @@ import {
   countUserDeposits,
   getUserDepositsPaged,
 } from "./db/deposits.js";
-import { getPgAdapter } from "./pg/index.js";
+import { getPgAdapter, DEPOSIT_EXPIRE_MIN } from "./pg/index.js";
 import { qrPhotoSource } from "./pg/qr.js";
 import { startPoller, cancelOrderHandler, finishOrderHandler } from "./poller.js";
 
@@ -246,6 +247,9 @@ async function showServicePage(ctx: Context, userId: number) {
     .catch(() => {});
 }
 
+// Cache total user — COUNT(*) tidak perlu di-query di setiap render menu (cukup segar tiap 60 dtk)
+const totalUserCache = ttlCache<number>(60_000);
+
 async function renderMenu(from: {
   id: number;
   first_name?: string | undefined;
@@ -257,8 +261,10 @@ async function renderMenu(from: {
     try {
       const u = await getOrCreateUser(from);
       balance = u.balance;
-      const c = await q1<{ n: number }>("SELECT COUNT(*) AS n FROM tb_users");
-      totalUser = c?.n ?? 0;
+      totalUser = await totalUserCache("all", async () => {
+        const c = await q1<{ n: number }>("SELECT COUNT(*) AS n FROM tb_users");
+        return c?.n ?? 0;
+      });
     } catch (e) {
       console.error("[db] renderMenu gagal:", (e as Error).message);
     }
@@ -634,7 +640,7 @@ bot.callbackQuery("tos", async (ctx) => {
       "• Kerahasiaan akun Telegram serta perangkat Anda menjadi tanggung jawab masing-masing pengguna.\n\n" +
       "*2. Deposit*\n" +
       "• Nominal minimal Rp 2.000 dan maksimal Rp 1.000.000 per transaksi.\n" +
-      "• Saldo dikreditkan hanya setelah pembayaran terkonfirmasi; deposit yang tidak dibayar dalam 15 menit otomatis kedaluwarsa.\n" +
+      "• Saldo dikreditkan hanya setelah pembayaran terkonfirmasi; deposit yang tidak dibayar dalam 10 menit otomatis kedaluwarsa.\n" +
       "• Kode unik pada nominal deposit merupakan bagian dari biaya layanan dan tidak ditambahkan ke saldo.\n\n" +
       "*3. Order Nomor OTP*\n" +
       "• Nomor disediakan oleh provider pihak ketiga; ketersediaan dan waktu tiba OTP berada di luar kendali kami.\n" +
@@ -1301,7 +1307,10 @@ bot.callbackQuery("dep:pay", async (ctx) => {
     return ctx.reply(`Gagal: ${(e as Error).message}`);
   }
 
-  const uniqueCode = Math.floor(Math.random() * 201) + 300;
+  // Fee deposit: on/off via DEPOSIT_FEE di .env (default aktif; "off"/"0" = tanpa fee)
+  const feeEnv = (process.env.DEPOSIT_FEE ?? "").trim().toLowerCase();
+  const feeOn = feeEnv !== "off" && feeEnv !== "0" && feeEnv !== "false";
+  const uniqueCode = feeOn ? Math.floor(Math.random() * 200) + 1 : 0;
   const totalBayar = st.nominal + uniqueCode;
   const merchantRef = `DEP-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 1000)}`;
 
@@ -1313,7 +1322,7 @@ bot.callbackQuery("dep:pay", async (ctx) => {
       telegramId: from.id,
       customerName: from.first_name || from.username || "Pengguna",
       description: `Deposit Nokos ${merchantRef} (nominal Rp ${st.nominal.toLocaleString("id-ID")})`,
-      expiresInMin: 15,
+      expiresInMin: DEPOSIT_EXPIRE_MIN,
     });
   } catch (e) {
     return ctx.reply(`Gagal membuat invoice: ${(e as Error).message}`);
@@ -1366,18 +1375,35 @@ bot.callbackQuery("dep:pay", async (ctx) => {
 });
 
 bot.callbackQuery("dep:cancel", async (ctx) => {
-  await ctx.answerCallbackQuery();
   const d = await q1<DbDeposit>("SELECT * FROM tb_deposits WHERE chat_id = ? AND message_id = ? AND status = 'PENDING'", [
     ctx.chat?.id ?? -1,
     ctx.callbackQuery.message?.message_id ?? -1,
   ]);
-  if (!d) return ctx.editMessageText(depositStatusText("CANCELED"), { parse_mode: "Markdown", reply_markup: backToMenuKb });
-  await markDeposit(d.id, "EXPIRED");
-  await ctx.editMessageText(depositStatusText("CANCELED"), {
-    parse_mode: "Markdown",
-    reply_markup: backToMenuKb,
-  });
-  console.log(`[deposit] id=${d.id} dibatalkan user`);
+  if (d) await markDeposit(d.id, "EXPIRED");
+
+  const text = depositStatusText("CANCELED");
+  // Kartu deposit berupa foto (caption), bukan teks — editMessageText selalu gagal di foto.
+  // Coba caption dulu, fallback ke teks (kartu darurat tanpa foto).
+  let ok = true;
+  try {
+    await ctx.editMessageCaption({ caption: text, parse_mode: "Markdown", reply_markup: backToMenuKb });
+  } catch {
+    try {
+      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: backToMenuKb });
+    } catch {
+      ok = false;
+    }
+  }
+
+  if (d) {
+    await ctx.answerCallbackQuery({ text: "🔴 Deposit dibatalkan" });
+    console.log(`[deposit] id=${d.id} dibatalkan user`);
+  } else {
+    await ctx.answerCallbackQuery({
+      text: ok ? "Deposit ini sudah tidak aktif" : "Gagal memperbarui pesan",
+      show_alert: !ok,
+    });
+  }
 });
 
 bot.on("message:text", async (ctx) => {

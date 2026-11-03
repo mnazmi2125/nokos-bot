@@ -50,12 +50,17 @@ export async function migrate(): Promise<void> {
     "ALTER TABLE tb_resellers ADD COLUMN restart_at DATETIME NULL AFTER status",
     "ALTER TABLE tb_resellers ADD COLUMN margin_type ENUM('PCT','AMOUNT') NOT NULL DEFAULT 'PCT' AFTER margin_pct",
     "ALTER TABLE tb_resellers ADD COLUMN margin_amount BIGINT NOT NULL DEFAULT 0 AFTER margin_type",
+    "ALTER TABLE tb_deposits ADD COLUMN matched_tx_id VARCHAR(64) NULL AFTER message_id",
+    "ALTER TABLE tb_deposits ADD UNIQUE KEY uq_deposits_matched_tx (matched_tx_id)",
   ];
   for (const a of alters) {
     try {
       await dbQuery(a);
     } catch (e) {
-      if ((e as { code?: string }).code !== "ER_DUP_FIELDNAME") throw e;
+      const code = (e as { code?: string }).code;
+      // Toleransi "sudah ada": kolom ganda (1060), nama key ganda (1061), indeks ganda
+      const dup = ["ER_DUP_FIELDNAME", "ER_DUP_KEYNAME", "ER_DUP_KEY", "ER_DUP_INDEX"];
+      if (!dup.includes(code ?? "")) throw e;
     }
   }
 

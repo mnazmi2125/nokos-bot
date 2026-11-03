@@ -32,4 +32,4 @@ export interface PgAdapter {
   getStatus(ref: string): Promise<PgStatus>;
 }
 
-export const DEPOSIT_EXPIRE_MIN = 15;
+export const DEPOSIT_EXPIRE_MIN = 10;

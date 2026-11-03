@@ -20,7 +20,7 @@ function buildMenu(csContact?: string | null): InlineKeyboard {
     .url(" Contact CS", csUrl(csContact))
     .row();
   if (process.env.RESELLER_MODE !== "1") {
-    kb.text("👤 Reseller Bot", "reseller").text("SMM Panel", "panel").row();
+    kb.text(" Reseller Bot", "reseller").text("SMM Panel", "panel").row();
   }
   return kb.text(" Syarat Ketentuan", "tos");
 }
