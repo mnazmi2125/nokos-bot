@@ -64,6 +64,11 @@ export function newBatchId(): string {
   return randomUUID();
 }
 
+function toMysqlDatetime(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toISOString().slice(0, 19).replace("T", " ");
+}
+
 export async function insertOrder(
   batchId: string,
   o: NewOrder,
@@ -80,7 +85,7 @@ export async function insertOrder(
       batchId, o.userId, o.server, owner, o.providerOrderId, o.productId, o.serviceId, o.serviceName,
       o.countryId, o.countryName, o.countryEmoji, o.operatorId, o.operatorName, o.phoneNumber,
       ref?.chatId ?? null, ref?.messageId ?? null, o.priceModal, o.priceSell, o.priceReseller ?? null,
-      o.status, o.expiresAt,
+      o.status, toMysqlDatetime(o.expiresAt),
     ]
   );
   return r.insertId;
