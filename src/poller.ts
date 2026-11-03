@@ -16,7 +16,10 @@ let botOwner: number | null = null;
 
 function isExpired(iso: string | null): boolean {
   if (!iso) return false;
-  return new Date(iso).getTime() <= Date.now();
+  // DB mengembalikan string "YYYY-MM-DD HH:MM:SS" (dateStrings:true, timezone server)
+  // Tambah 'Z' hanya jika belum ada offset agar diparse sebagai UTC konsisten
+  const s = iso.includes("T") || iso.endsWith("Z") ? iso : iso.replace(" ", "T") + "Z";
+  return new Date(s).getTime() <= Date.now();
 }
 
 export async function refreshOrderCard(o: DbOrder): Promise<void> {

@@ -1136,21 +1136,6 @@ async function executePurchase(
   for (const o of created.orders) {
     idx += 1;
     balanceAfter -= unitPrice;
-    // Kirim kartu sementara dulu (tanpa tombol) untuk dapat chat_id & message_id
-    const msg = await ctx.reply(
-      orderCardText({
-        idx,
-        serviceName: view.service.name,
-        countryEmoji: view.country.emoji,
-        countryName: view.country.name,
-        phone: o.phone_number,
-        priceSell: unitPrice,
-        balanceAfter,
-        expiresAt: o.expires_at,
-        status: "ACTIVE",
-      }),
-      { parse_mode: "Markdown" }
-    );
     const dbId = await insertOrder(
       batchId,
       {
@@ -1172,20 +1157,30 @@ async function executePurchase(
         status: o.status === "ACTIVE" ? "ACTIVE" : "PENDING",
         expiresAt: o.expires_at,
       },
-      { chatId: msg.chat.id, messageId: msg.message_id },
+      undefined,
       OWNER_ID
     );
-    // Pasang tombol Cancel setelah dbId tersedia — retry sekali jika gagal
-    try {
-      await bot.api.editMessageReplyMarkup(msg.chat.id, msg.message_id, {
-        reply_markup: orderCardKb(dbId, "ACTIVE"),
-      });
-    } catch {
-      await new Promise((r) => setTimeout(r, 1_000));
-      await bot.api.editMessageReplyMarkup(msg.chat.id, msg.message_id, {
-        reply_markup: orderCardKb(dbId, "ACTIVE"),
-      }).catch((e) => console.error(`[order] gagal pasang tombol order ${dbId}:`, (e as Error).message));
-    }
+    // Kirim kartu dengan tombol Cancel langsung (dbId sudah tersedia)
+    const msg = await ctx.reply(
+      orderCardText({
+        idx,
+        serviceName: view.service.name,
+        countryEmoji: view.country.emoji,
+        countryName: view.country.name,
+        phone: o.phone_number,
+        priceSell: unitPrice,
+        balanceAfter,
+        expiresAt: o.expires_at,
+        status: "ACTIVE",
+      }),
+      { parse_mode: "Markdown", reply_markup: orderCardKb(dbId, "ACTIVE") }
+    );
+    // Simpan chat_id & message_id ke DB agar poller bisa update kartu
+    await import("./db/index.js").then(({ qExec }) =>
+      qExec("UPDATE tb_orders SET chat_id = ?, message_id = ? WHERE id = ?", [
+        msg.chat.id, msg.message_id, dbId,
+      ])
+    );
   }
 
   console.log(
