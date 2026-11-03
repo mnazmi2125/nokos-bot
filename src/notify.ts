@@ -74,7 +74,7 @@ export async function notifyOrder(
       `🔐 KODE: <code>${esc(o.otp_code ?? "-")}</code>`,
       HR,
       `👤 PEMBELI: ${esc(buyerLabel(buyer, o.user_id))}`,
-      `🆔 USER ID: <code>${buyer?.telegram_id ?? o.user_id}</code>`,
+      `🤖 BOT: ${esc(process.env.BOT_USERNAME ?? "-")}`,
     ].join("\n");
     await send(bot, text);
   } catch (e) {
@@ -97,7 +97,7 @@ export async function notifyDeposit(bot: Bot | null, d: DbDeposit): Promise<void
     lines.push(`💳 METODE: ${esc(d.method)}`);
     lines.push(HR);
     lines.push(`👤 PEMBELI: ${esc(buyerLabel(buyer, d.user_id))}`);
-    lines.push(`🆔 USER ID: <code>${buyer?.telegram_id ?? d.user_id}</code>`);
+    lines.push(`🤖 BOT: ${esc(process.env.BOT_USERNAME ?? "-")}`);
     await send(bot, lines.join("\n"));
   } catch (e) {
     console.warn("[notify] deposit gagal dikirim:", (e as Error).message);
