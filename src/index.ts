@@ -1136,6 +1136,7 @@ async function executePurchase(
   for (const o of created.orders) {
     idx += 1;
     balanceAfter -= unitPrice;
+    // Kirim kartu sementara dulu (tanpa tombol) untuk dapat chat_id & message_id
     const msg = await ctx.reply(
       orderCardText({
         idx,
@@ -1174,9 +1175,17 @@ async function executePurchase(
       { chatId: msg.chat.id, messageId: msg.message_id },
       OWNER_ID
     );
-    await bot.api.editMessageReplyMarkup(msg.chat.id, msg.message_id, {
-      reply_markup: orderCardKb(dbId, "ACTIVE"),
-    });
+    // Pasang tombol Cancel setelah dbId tersedia — retry sekali jika gagal
+    try {
+      await bot.api.editMessageReplyMarkup(msg.chat.id, msg.message_id, {
+        reply_markup: orderCardKb(dbId, "ACTIVE"),
+      });
+    } catch {
+      await new Promise((r) => setTimeout(r, 1_000));
+      await bot.api.editMessageReplyMarkup(msg.chat.id, msg.message_id, {
+        reply_markup: orderCardKb(dbId, "ACTIVE"),
+      }).catch((e) => console.error(`[order] gagal pasang tombol order ${dbId}:`, (e as Error).message));
+    }
   }
 
   console.log(
