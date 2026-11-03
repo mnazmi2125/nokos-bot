@@ -3,7 +3,6 @@ import { ttlCache } from "../../cache.js";
 
 const MIN = 60_000;
 const opsCache = ttlCache<SmsOperator[]>(10 * MIN);
-const priceCache = ttlCache<SmsProduct[]>(2 * MIN);
 const balanceCache = ttlCache<{ currency: string; balance: number }>(1 * MIN);
 
 export interface SmsService {
@@ -58,22 +57,16 @@ export async function getProducts(platformId: number): Promise<SmsProduct[]> {
   return all;
 }
 
-export function getProductsByCountry(
-  platformId: number,
+export function filterProducts(
+  products: SmsProduct[],
   countryId: number,
   operatorId?: number | null
-): Promise<SmsProduct[]> {
-  const key = `${platformId}:${countryId}:${operatorId ?? "any"}`;
-  return priceCache(key, async () => {
-    const params = new URLSearchParams({
-      platform_id: String(platformId),
-      country_id: String(countryId),
-      limit: "10000",
-      page: "1",
-    });
-    if (operatorId != null) params.set("operator_id", String(operatorId));
-    return smscodeGet<SmsProduct[]>(`/catalog/products?${params}`);
-  });
+): SmsProduct[] {
+  return products.filter(
+    (p) =>
+      p.country_id === countryId &&
+      (operatorId == null || p.operator_id === operatorId)
+  );
 }
 
 export interface SmsOperator {

@@ -71,7 +71,7 @@ import {
   getServices,
   getCountries,
   getProducts,
-  getProductsByCountry,
+  filterProducts,
   getOperators,
   getProviderBalance,
   SmsService,
@@ -138,6 +138,7 @@ async function menuKb(): Promise<InlineKeyboard> {
 
 let svcCache: { at: number; services: SmsService[] } | null = null;
 let countryCache: { at: number; countries: SmsCountry[] } | null = null;
+const PROD_TTL = 15 * 60_000;
 const prodCache = new Map<number, { at: number; products: Awaited<ReturnType<typeof getProducts>> }>();
 
 const userView = new Map<
@@ -189,26 +190,41 @@ async function loadCountries(): Promise<SmsCountry[]> {
 
 async function loadProducts(platformId: number) {
   const cached = prodCache.get(platformId);
-  if (cached && Date.now() - cached.at < 300_000) return cached.products;
+  if (cached && Date.now() - cached.at < PROD_TTL) return cached.products;
   const data = await getProducts(platformId);
   prodCache.set(platformId, { at: Date.now(), products: data });
   return data;
+}
+
+async function refreshAllProducts(services: SmsService[]): Promise<void> {
+  for (const s of services) {
+    try {
+      const data = await getProducts(s.id);
+      prodCache.set(s.id, { at: Date.now(), products: data });
+    } catch (e) {
+      console.warn(`[refresh] produk ${s.name} gagal:`, (e as Error).message);
+    }
+  }
 }
 
 async function warmup() {
   try {
     const services = await loadServices();
     await loadCountries();
-    console.log(`[warmup] ${services.length} layanan, negara siap`);
-    const top = services.slice(0, 5);
-    for (const s of top) {
+    console.log(`[warmup] ${services.length} layanan, negara siap — mulai prefetch produk...`);
+    await refreshAllProducts(services);
+    console.log(`[warmup] semua produk siap`);
+    // Proactive refresh: perbarui cache 2 menit sebelum expired, tanpa tunggu user klik
+    setInterval(async () => {
       try {
-        await loadProducts(s.id);
-        console.log(`[warmup] produk ${s.name} siap`);
+        const svcs = await loadServices();
+        await loadCountries();
+        await refreshAllProducts(svcs);
+        console.log(`[refresh] cache produk diperbarui (${new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })})`);
       } catch (e) {
-        console.warn(`[warmup] produk ${s.name} gagal:`, (e as Error).message);
+        console.warn("[refresh] gagal:", (e as Error).message);
       }
-    }
+    }, PROD_TTL - 2 * 60_000);
   } catch (e) {
     console.warn("[warmup] gagal:", (e as Error).message);
   }
@@ -865,7 +881,8 @@ async function loadPrices(
   ctrId: number,
   oprId: number | null
 ): Promise<PriceItem[]> {
-  const products = await getProductsByCountry(svcId, ctrId, oprId);
+  const all = await loadProducts(svcId);
+  const products = filterProducts(all, ctrId, oprId);
   let rs: Awaited<ReturnType<typeof getResellerByUserId>> = null;
   if (OWNER_ID != null) {
     try {
