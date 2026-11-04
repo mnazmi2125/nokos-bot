@@ -2,7 +2,6 @@
 // Aktif bila NOTIFY_CHANNEL_ID diisi di .env — kosong = fitur mati.
 // Nomor HP pembeli disensor (4 digit awal + **** + 4 digit akhir) demi keamanan publik.
 import type { Bot } from "grammy";
-import { getUserById, type DbUser } from "./db/users.js";
 import type { DbOrder } from "./db/orders.js";
 import type { DbDeposit } from "./db/deposits.js";
 
@@ -18,12 +17,6 @@ export function maskPhone(p: string | null): string {
   const s = p.replace(/\D/g, "");
   if (s.length <= 8) return "****";
   return `${s.slice(0, 4)}****${s.slice(-4)}`;
-}
-
-function buyerLabel(u: DbUser | null, userId: number): string {
-  if (u?.username) return `@${u.username}`;
-  if (u?.first_name) return u.first_name;
-  return `User #${userId}`;
 }
 
 function header(): string {
@@ -57,7 +50,6 @@ export async function notifyOrder(
 ): Promise<void> {
   if (!bot || !notifyEnabled()) return;
   try {
-    const buyer = await getUserById(o.user_id);
     const sms = otpMessage ?? o.otp_message ?? "-";
     const text = [
       `🔐 <b>${header()} — REAL TIME OTP</b>`,
@@ -71,10 +63,6 @@ export async function notifyOrder(
       HR,
       `📩 SMS:`,
       `<pre>${esc(sms)}</pre>`,
-      `🔐 KODE: <code>${esc(o.otp_code ?? "-")}</code>`,
-      HR,
-      `👤 PEMBELI: ${esc(buyerLabel(buyer, o.user_id))}`,
-      `🤖 BOT: ${esc(process.env.BOT_USERNAME ?? "-")}`,
     ].join("\n");
     await send(bot, text);
   } catch (e) {
@@ -86,7 +74,6 @@ export async function notifyOrder(
 export async function notifyDeposit(bot: Bot | null, d: DbDeposit): Promise<void> {
   if (!bot || !notifyEnabled()) return;
   try {
-    const buyer = await getUserById(d.user_id);
     const lines = [
       `💳 <b>${header()} — DEPOSIT BERHASIL</b>`,
       HR,
@@ -95,9 +82,6 @@ export async function notifyDeposit(bot: Bot | null, d: DbDeposit): Promise<void
     ];
     if (d.unique_code > 0) lines.push(`🧾 FEE: Rp ${d.unique_code.toLocaleString("id-ID")}`);
     lines.push(`💳 METODE: ${esc(d.method)}`);
-    lines.push(HR);
-    lines.push(`👤 PEMBELI: ${esc(buyerLabel(buyer, d.user_id))}`);
-    lines.push(`🤖 BOT: ${esc(process.env.BOT_USERNAME ?? "-")}`);
     await send(bot, lines.join("\n"));
   } catch (e) {
     console.warn("[notify] deposit gagal dikirim:", (e as Error).message);
