@@ -651,15 +651,17 @@ bot.callbackQuery("rm_restart", async (ctx) => {
 });
 
 bot.callbackQuery("rm_withdraw", async (ctx) => {
-  await ctx.answerCallbackQuery();
   const r = await getResellerByTelegram(ctx.from.id);
-  if (!r?.bot_token)
+  if (!r?.bot_token) {
+    await ctx.answerCallbackQuery();
     return ctx.reply("⚠️ Buat bot reseller dulu lewat 👤 Reseller Bot.", { reply_markup: resellerPanelKb });
+  }
   if (await hasPendingWithdrawal(r.id))
     return ctx.answerCallbackQuery({
       text: "⏳ Ada withdraw pending, tunggu konfirmasi admin sebelum melanjutkan.",
       show_alert: true,
     });
+  await ctx.answerCallbackQuery();
   clearResellerInput(ctx.from.id);
   awaitingWdAmount.add(ctx.from.id);
   return ctx.editMessageText(
