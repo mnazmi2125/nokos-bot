@@ -12,6 +12,14 @@ export interface DbWithdrawal {
   updated_at: string;
 }
 
+export async function hasPendingWithdrawal(resellerId: number): Promise<boolean> {
+  const r = await q1<{ c: number }>(
+    "SELECT COUNT(*) AS c FROM tb_withdrawals WHERE reseller_id = ? AND status = 'PENDING'",
+    [resellerId]
+  );
+  return (r?.c ?? 0) > 0;
+}
+
 export async function insertWithdrawal(resellerId: number, amount: number): Promise<number> {
   const r = await qExec(
     "INSERT INTO tb_withdrawals (reseller_id, amount) VALUES (?, ?)",

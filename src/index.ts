@@ -105,7 +105,7 @@ import {
 import { getSetting } from "./db/settings.js";
 import { ttlCache } from "./cache.js";
 import { newBatchId, insertOrder, countUserOrders, getUserOrdersPaged } from "./db/orders.js";
-import { insertWithdrawal, getWithdrawalsPaged, countWithdrawals } from "./db/withdrawals.js";
+import { insertWithdrawal, getWithdrawalsPaged, countWithdrawals, hasPendingWithdrawal } from "./db/withdrawals.js";
 import {
   insertDeposit,
   setDepositMessage,
@@ -655,6 +655,11 @@ bot.callbackQuery("rm_withdraw", async (ctx) => {
   const r = await getResellerByTelegram(ctx.from.id);
   if (!r?.bot_token)
     return ctx.reply("⚠️ Buat bot reseller dulu lewat 👤 Reseller Bot.", { reply_markup: resellerPanelKb });
+  if (await hasPendingWithdrawal(r.id))
+    return ctx.answerCallbackQuery({
+      text: "⏳ Kamu masih memiliki withdraw yang sedang diproses (PENDING). Tunggu hingga Admin menyelesaikan request sebelumnya.",
+      show_alert: true,
+    });
   clearResellerInput(ctx.from.id);
   awaitingWdAmount.add(ctx.from.id);
   return ctx.editMessageText(
@@ -675,6 +680,8 @@ bot.callbackQuery(/^wd_confirm:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const r = await getResellerByTelegram(ctx.from.id);
   if (!r?.bot_token) return ctx.reply("⚠️ Data reseller tidak ditemukan.");
+  if (await hasPendingWithdrawal(r.id))
+    return ctx.reply("⏳ Masih ada withdraw PENDING. Tunggu hingga Admin menyelesaikan request sebelumnya.", { reply_markup: resellerBackKb });
   if (!r.payment_method || !r.payment_info)
     return ctx.reply("⚠️ Atur rekening tujuan dulu.", { reply_markup: resellerBackKb });
   if (r.saldo_margin < amount)
