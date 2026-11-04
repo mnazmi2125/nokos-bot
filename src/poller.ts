@@ -100,6 +100,17 @@ async function editDepositCard(d: DbDeposit, text: string): Promise<void> {
   } catch {}
 }
 
+/** Hapus kartu QR dari chat saat sesi selesai (PAID/EXPIRED/FAILED).
+ *  Fallback: edit caption bila penghapusan gagal (mis. pesan terlalu tua). */
+async function removeDepositCard(d: DbDeposit, fallbackText: string): Promise<void> {
+  if (!botRef || !d.chat_id || !d.message_id) return;
+  try {
+    await botRef.api.deleteMessage(d.chat_id, d.message_id);
+    return;
+  } catch {}
+  await editDepositCard(d, fallbackText);
+}
+
 let depPolling = false;
 
 async function pollDeposits(): Promise<void> {
@@ -129,7 +140,7 @@ async function pollDeposits(): Promise<void> {
           `Deposit QRIS ${d.external_id} (${pg.name})`
         );
         const text = depositPaidText(d.amount, r.balance ?? 0);
-        await editDepositCard(d, text);
+        await removeDepositCard(d, text); // QR dihapus — status dikirim sebagai pesan baru di bawah
         if (botRef && d.chat_id) {
           await botRef.api
             .sendMessage(d.chat_id, text, { parse_mode: "Markdown" })
@@ -140,9 +151,8 @@ async function pollDeposits(): Promise<void> {
       } else {
         await markDeposit(d.id, status === "EXPIRED" ? "EXPIRED" : "FAILED");
         const endText = depositStatusText(status === "EXPIRED" ? "EXPIRED" : "FAILED");
-        await editDepositCard(d, endText);
-        // Kirim pesan notifikasi khusus saat kedaluwarsa (edit caption tidak menimbulkan notifikasi)
-        if (status === "EXPIRED" && botRef && d.chat_id) {
+        await removeDepositCard(d, endText); // QR dihapus — status jadi pesan baru (ada notifikasi)
+        if (botRef && d.chat_id) {
           await botRef.api
             .sendMessage(d.chat_id, endText, { parse_mode: "Markdown" })
             .catch(() => {});

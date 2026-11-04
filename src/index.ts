@@ -115,6 +115,7 @@ import {
   getUserDepositsPaged,
 } from "./db/deposits.js";
 import { getPgAdapter, DEPOSIT_EXPIRE_MIN } from "./pg/index.js";
+import { setOtpNotifier, deliverOtpCode } from "./pg/qris/gopay.js";
 import { qrPhotoSource } from "./pg/qr.js";
 import { startPoller, cancelOrderHandler, finishOrderHandler } from "./poller.js";
 
@@ -122,6 +123,12 @@ const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN belum diisi di .env");
 
 const bot = new Bot(token);
+
+// Relay OTP login GoPay: saat token habis, bot DM admin meminta kode OTP
+setOtpNotifier(async (msg) => {
+  const admin = Number(process.env.GOPAY_OTP_ADMIN ?? 0);
+  if (admin) await bot.api.sendMessage(admin, msg, { parse_mode: "HTML" });
+});
 
 const RESELLER_MODE = process.env.RESELLER_MODE === "1";
 const OWNER_ID: number | null = process.env.RESELLER_OWNER_ID
@@ -387,6 +394,20 @@ bot.command("help", async (ctx) =>
 bot.callbackQuery("help", async (ctx) =>
   ctx.editMessageText(helpTextFor(await activeCsContact()), { parse_mode: "Markdown", reply_markup: backMenu })
 );
+
+// Relay OTP login GoPay — hanya diterima dari GOPAY_OTP_ADMIN
+bot.command("gopayotp", async (ctx) => {
+  if (!ctx.from) return;
+  const admin = Number(process.env.GOPAY_OTP_ADMIN ?? 0);
+  if (!admin || ctx.from.id !== admin) return; // bukan admin → diam
+  const code = ctx.match.trim();
+  if (!/^\d{4,8}$/.test(code)) return ctx.reply("Format: /gopayotp 123456");
+  return ctx.reply(
+    deliverOtpCode(code)
+      ? "✅ Kode diterima — memverifikasi login GoPay..."
+      : "Tidak ada login yang sedang menunggu kode."
+  );
+});
 
 async function getResellerView(
   telegramId: number
@@ -739,7 +760,9 @@ bot.callbackQuery("tos", async (ctx) => {
       "• Kerahasiaan akun Telegram serta perangkat Anda menjadi tanggung jawab masing-masing pengguna.\n\n" +
       "*2. Deposit*\n" +
       "• Nominal minimal Rp 2.000 dan maksimal Rp 1.000.000 per transaksi.\n" +
-      "• Saldo dikreditkan hanya setelah pembayaran terkonfirmasi; deposit yang tidak dibayar dalam 10 menit otomatis kedaluwarsa.\n" +
+      "• Saldo dikreditkan hanya setelah pembayaran terkonfirmasi; deposit yang tidak dibayar dalam " +
+        DEPOSIT_EXPIRE_MIN +
+        " menit otomatis kedaluwarsa.\n" +
       "• Kode unik pada nominal deposit merupakan bagian dari biaya layanan dan tidak ditambahkan ke saldo.\n\n" +
       "*3. Order Nomor OTP*\n" +
       "• Nomor disediakan oleh provider pihak ketiga; ketersediaan dan waktu tiba OTP berada di luar kendali kami.\n" +
@@ -1486,17 +1509,26 @@ bot.callbackQuery("dep:cancel", async (ctx) => {
   if (d) await markDeposit(d.id, "EXPIRED");
 
   const text = depositStatusText("CANCELED");
-  // Kartu deposit berupa foto (caption), bukan teks — editMessageText selalu gagal di foto.
-  // Coba caption dulu, fallback ke teks (kartu darurat tanpa foto).
+  // Kartu deposit berupa foto — QR harus HAPUS saat sesi selesai.
+  // Hapus pesan dulu; fallback edit caption/teks bila penghapusan gagal.
+  let deleted = false;
   let ok = true;
   try {
-    await ctx.editMessageCaption({ caption: text, parse_mode: "Markdown", reply_markup: backToMenuKb });
+    await ctx.deleteMessage();
+    deleted = true;
   } catch {
     try {
-      await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: backToMenuKb });
+      await ctx.editMessageCaption({ caption: text, parse_mode: "Markdown", reply_markup: backToMenuKb });
     } catch {
-      ok = false;
+      try {
+        await ctx.editMessageText(text, { parse_mode: "Markdown", reply_markup: backToMenuKb });
+      } catch {
+        ok = false;
+      }
     }
+  }
+  if (deleted) {
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: backToMenuKb }).catch(() => {});
   }
 
   if (d) {
