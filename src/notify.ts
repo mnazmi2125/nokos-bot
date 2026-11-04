@@ -1,11 +1,28 @@
 // Notifikasi publik (history transaksi & deposit) ke channel/grup Telegram.
 // Aktif bila NOTIFY_CHANNEL_ID diisi di .env — kosong = fitur mati.
 // Nomor HP pembeli disensor (4 digit awal + **** + 4 digit akhir) demi keamanan publik.
-import type { Bot } from "grammy";
+import { Bot } from "grammy";
 import type { DbOrder } from "./db/orders.js";
 import type { DbDeposit } from "./db/deposits.js";
 
 const HR = "━━━━━";
+
+let channelBot: Bot | null = null;
+
+/** Bot pengirim notifikasi channel: pakai NOTIFY_BOT_TOKEN (token bot utama)
+ *  bila diisi — semua proses (termasuk bot reseller) mengirim lewat bot yang
+ *  sama, jadi cukup bot utama yang jadi admin grup sekali setel. */
+function resolveSender(fallback: Bot): Bot {
+  const t = process.env.NOTIFY_BOT_TOKEN?.trim();
+  if (!t || t === fallback.token) return fallback;
+  if (!channelBot) channelBot = new Bot(t);
+  return channelBot;
+}
+
+/** Label pengirim: nama bot reseller (RESELLER_LABEL, di-set orchestrator) atau "Bot Utama". */
+function senderLabel(): string {
+  return esc(process.env.RESELLER_LABEL?.trim() || "Bot Utama");
+}
 
 function esc(s: string): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -34,7 +51,7 @@ export function notifyEnabled(): boolean {
 
 async function send(bot: Bot, text: string): Promise<void> {
   try {
-    await bot.api.sendMessage(process.env.NOTIFY_CHANNEL_ID!.trim(), text, {
+    await resolveSender(bot).api.sendMessage(process.env.NOTIFY_CHANNEL_ID!.trim(), text, {
       parse_mode: "HTML",
     });
   } catch (e) {
@@ -54,12 +71,13 @@ export async function notifyOrder(
     const text = [
       `🔐 <b>${header()} — REAL TIME OTP</b>`,
       HR,
+      `🤖 BOT: ${senderLabel()}`,
       `🖥 SERVER: ${esc(o.server)}`,
       `🆔 ID: <code>${o.provider_order_id}</code>`,
       `📱 LAYANAN: ${esc(o.service_name)}`,
       `🌍 NEGARA: ${esc(o.country_emoji)} ${esc(o.country_name)}`,
       `📱 NOMOR: <code>${maskPhone(o.phone_number)}</code>`,
-      `💵 HARGA: Rp ${o.price_sell.toLocaleString("id-ID")}`,
+      `💵 HARGA: Rp ${(o.price_reseller ?? o.price_sell).toLocaleString("id-ID")}`,
       HR,
       `📩 SMS:`,
       `<pre>${esc(sms)}</pre>`,
@@ -82,6 +100,7 @@ export async function notifyDeposit(bot: Bot | null, d: DbDeposit): Promise<void
     ];
     if (d.unique_code > 0) lines.push(`🧾 FEE: Rp ${d.unique_code.toLocaleString("id-ID")}`);
     lines.push(`💳 METODE: ${esc(d.method)}`);
+    lines.push(`🤖 BOT: ${senderLabel()}`);
     await send(bot, lines.join("\n"));
   } catch (e) {
     console.warn("[notify] deposit gagal dikirim:", (e as Error).message);

@@ -734,7 +734,12 @@ export const backToMenuKb = new InlineKeyboard().text("🏠 Menu Utama", "back_m
 
 // ── WITHDRAW RESELLER ──────────────────────────────────────────────────────
 
-export function wdRequestText(saldoMargin: number, paymentMethod: string | null, paymentInfo: string | null): string {
+export function wdRequestText(
+  saldoMargin: number,
+  paymentMethod: string | null,
+  paymentInfo: string | null,
+  min = 0
+): string {
   const rekening = paymentMethod && paymentInfo
     ? `${paymentMethod} — ${paymentInfo}`
     : "_Belum diatur_";
@@ -744,7 +749,7 @@ export function wdRequestText(saldoMargin: number, paymentMethod: string | null,
 💳 Rekening     : ${rekening}
 
 Kirim nominal withdraw yang diinginkan (contoh: \`50000\`).
-Minimal Rp 0 (untuk testing).`;
+Minimal Rp ${min.toLocaleString("id-ID")}.`;
 }
 
 export const wdRequestKb = new InlineKeyboard()

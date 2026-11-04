@@ -10,6 +10,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 interface ResellerRow {
   reseller_owner_id: number;
   reseller_bot_username: string | null;
+  reseller_bot_name: string | null;
   reseller_bot_token: string;
   status: string;
   restart_at: string | null;
@@ -28,6 +29,10 @@ function startChild(row: ResellerRow): void {
       BOT_TOKEN: row.reseller_bot_token,
       RESELLER_MODE: "1",
       RESELLER_OWNER_ID: String(row.reseller_owner_id),
+      // Label pengirim notifikasi channel (tampil di pesan: "🤖 BOT: ...")
+      RESELLER_LABEL:
+        row.reseller_bot_name?.trim() ||
+        (row.reseller_bot_username ? `@${row.reseller_bot_username}` : `Reseller #${row.reseller_owner_id}`),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

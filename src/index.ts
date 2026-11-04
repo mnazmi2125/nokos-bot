@@ -187,6 +187,8 @@ const replacingResellerToken = new Set<number>();
 const awaitingMargin = new Map<number, "PCT" | "AMOUNT">();
 const awaitingCs = new Set<number>();
 const awaitingWdAmount = new Set<number>();
+// Minimal withdraw saldo margin — atur di .env: WITHDRAW_MIN (default 0)
+const WITHDRAW_MIN = Number(process.env.WITHDRAW_MIN || 0);
 const awaitingWdPaymentMethod = new Set<number>();
 const awaitingWdPaymentInfo = new Map<number, string>(); // telegramId -> method
 
@@ -686,7 +688,7 @@ bot.callbackQuery("rm_withdraw", async (ctx) => {
   clearResellerInput(ctx.from.id);
   awaitingWdAmount.add(ctx.from.id);
   return ctx.editMessageText(
-    wdRequestText(r.saldo_margin, r.payment_method, r.payment_info),
+    wdRequestText(r.saldo_margin, r.payment_method, r.payment_info, WITHDRAW_MIN),
     { parse_mode: "Markdown", reply_markup: wdRequestKb }
   );
 });
@@ -703,6 +705,11 @@ bot.callbackQuery(/^wd_confirm:(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const r = await getResellerByTelegram(ctx.from.id);
   if (!r?.bot_token) return ctx.reply("⚠️ Data reseller tidak ditemukan.");
+  if (!amount || amount < WITHDRAW_MIN)
+    return ctx.reply(
+      `⚠️ Nominal tidak valid (minimal Rp ${WITHDRAW_MIN.toLocaleString("id-ID")}).`,
+      { reply_markup: resellerBackKb }
+    );
   if (await hasPendingWithdrawal(r.id))
     return ctx.reply("⏳ Masih ada withdraw PENDING. Tunggu hingga Admin menyelesaikan request sebelumnya.", { reply_markup: resellerBackKb });
   if (!r.payment_method || !r.payment_info)
@@ -1640,7 +1647,7 @@ bot.on("message:text", async (ctx) => {
     const r = await getResellerByTelegram(id);
     if (r) {
       awaitingWdAmount.add(id);
-      await ctx.reply(wdRequestText(r.saldo_margin, method, info), { parse_mode: "Markdown", reply_markup: wdRequestKb });
+      await ctx.reply(wdRequestText(r.saldo_margin, method, info, WITHDRAW_MIN), { parse_mode: "Markdown", reply_markup: wdRequestKb });
     }
     return;
   }
@@ -1652,6 +1659,13 @@ bot.on("message:text", async (ctx) => {
     if (!r) return;
     if (!amount || amount <= 0) {
       await ctx.reply("⚠️ Nominal tidak valid. Kirim angka, contoh: `50000`.", { parse_mode: "Markdown", reply_markup: resellerBackKb });
+      return;
+    }
+    if (amount < WITHDRAW_MIN) {
+      await ctx.reply(
+        `⚠️ Minimal withdraw Rp ${WITHDRAW_MIN.toLocaleString("id-ID")}.`,
+        { reply_markup: resellerBackKb }
+      );
       return;
     }
     if (amount > r.saldo_margin) {
@@ -1760,7 +1774,8 @@ async function orderHistoryView(userId: number, page: number) {
       idx: offset + i + 1,
       serviceName: o.service_name,
       phone: o.phone_number,
-      priceSell: o.price_sell,
+      // History juga menampilkan harga yang dibayar pembeli (harga reseller bila ada)
+      priceSell: o.price_reseller ?? o.price_sell,
       status: o.status,
       otpCode: o.otp_code,
       createdAt: o.created_at,

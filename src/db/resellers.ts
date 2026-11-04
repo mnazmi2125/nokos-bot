@@ -143,6 +143,7 @@ export async function listResellersWithToken(): Promise<
   Array<{
     reseller_owner_id: number;
     reseller_bot_username: string | null;
+    reseller_bot_name: string | null;
     reseller_bot_token: string;
     status: string;
     restart_at: string | null;
@@ -151,6 +152,7 @@ export async function listResellersWithToken(): Promise<
   return q(
     `SELECT user_id AS reseller_owner_id,
             bot_username AS reseller_bot_username,
+            bot_name AS reseller_bot_name,
             bot_token AS reseller_bot_token,
             status,
             restart_at

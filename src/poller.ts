@@ -34,7 +34,8 @@ export async function refreshOrderCard(o: DbOrder): Promise<void> {
         countryEmoji: o.country_emoji,
         countryName: o.country_name,
         phone: o.phone_number,
-        priceSell: o.price_sell,
+        // Harga yang dibayar pembeli: harga reseller (sudah + margin) bila order via reseller
+        priceSell: o.price_reseller ?? o.price_sell,
         balanceAfter: null,
         expiresAt: o.expires_at,
         status: o.status === "PENDING" ? "ACTIVE" : o.status,
