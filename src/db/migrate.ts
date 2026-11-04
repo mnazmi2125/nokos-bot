@@ -52,6 +52,20 @@ export async function migrate(): Promise<void> {
     "ALTER TABLE tb_resellers ADD COLUMN margin_amount BIGINT NOT NULL DEFAULT 0 AFTER margin_type",
     "ALTER TABLE tb_deposits ADD COLUMN matched_tx_id VARCHAR(64) NULL AFTER message_id",
     "ALTER TABLE tb_deposits ADD UNIQUE KEY uq_deposits_matched_tx (matched_tx_id)",
+    "ALTER TABLE tb_resellers ADD COLUMN payment_method VARCHAR(64) NULL AFTER saldo_margin",
+    "ALTER TABLE tb_resellers ADD COLUMN payment_info VARCHAR(128) NULL AFTER payment_method",
+    `CREATE TABLE IF NOT EXISTS tb_withdrawals (
+      id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      reseller_id  BIGINT UNSIGNED NOT NULL,
+      amount       BIGINT NOT NULL,
+      status       ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+      note         VARCHAR(255) NULL,
+      created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_wd_reseller (reseller_id, status),
+      CONSTRAINT fk_wd_reseller FOREIGN KEY (reseller_id) REFERENCES tb_resellers (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   ];
   for (const a of alters) {
     try {

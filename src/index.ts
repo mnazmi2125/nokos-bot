@@ -55,6 +55,16 @@ import {
   orderCardText,
   orderCardKb,
   backToMenuKb,
+  wdRequestText,
+  wdRequestKb,
+  wdSetPaymentMethodText,
+  wdSetPaymentInfoText,
+  wdConfirmText,
+  wdConfirmKb,
+  wdSuccessText,
+  wdHistoryText,
+  wdHistoryKb,
+  WD_HISTORY_PAGE_SIZE,
   depositNominalText,
   depositNominalKb,
   depositCustomText,
@@ -89,10 +99,13 @@ import {
   updateResellerCs,
   updateResellerMargin,
   setResellerStatus,
+  updateResellerPayment,
+  deductResellerMargin,
 } from "./db/resellers.js";
 import { getSetting } from "./db/settings.js";
 import { ttlCache } from "./cache.js";
 import { newBatchId, insertOrder, countUserOrders, getUserOrdersPaged } from "./db/orders.js";
+import { insertWithdrawal, getWithdrawalsPaged, countWithdrawals } from "./db/withdrawals.js";
 import {
   insertDeposit,
   setDepositMessage,
@@ -166,12 +179,18 @@ const awaitingResellerToken = new Set<number>();
 const replacingResellerToken = new Set<number>();
 const awaitingMargin = new Map<number, "PCT" | "AMOUNT">();
 const awaitingCs = new Set<number>();
+const awaitingWdAmount = new Set<number>();
+const awaitingWdPaymentMethod = new Set<number>();
+const awaitingWdPaymentInfo = new Map<number, string>(); // telegramId -> method
 
 function clearResellerInput(id: number): void {
   awaitingResellerToken.delete(id);
   replacingResellerToken.delete(id);
   awaitingMargin.delete(id);
   awaitingCs.delete(id);
+  awaitingWdAmount.delete(id);
+  awaitingWdPaymentMethod.delete(id);
+  awaitingWdPaymentInfo.delete(id);
 }
 
 async function loadServices(): Promise<SmsService[]> {
@@ -631,19 +650,74 @@ bot.callbackQuery("rm_restart", async (ctx) => {
   }
 });
 
-bot.callbackQuery("rm_withdraw", (ctx) =>
-  ctx.answerCallbackQuery({
-    text: "⬇️ Fitur Withdraw segera hadir — saldo margin bisa ditarik setelah backend pencairan aktif.",
-    show_alert: true,
-  })
-);
+bot.callbackQuery("rm_withdraw", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const r = await getResellerByTelegram(ctx.from.id);
+  if (!r?.bot_token)
+    return ctx.reply("⚠️ Buat bot reseller dulu lewat 👤 Reseller Bot.", { reply_markup: resellerPanelKb });
+  clearResellerInput(ctx.from.id);
+  awaitingWdAmount.add(ctx.from.id);
+  return ctx.editMessageText(
+    wdRequestText(r.saldo_margin, r.payment_method, r.payment_info),
+    { parse_mode: "Markdown", reply_markup: wdRequestKb }
+  );
+});
 
-bot.callbackQuery("rm_rwd", (ctx) =>
-  ctx.answerCallbackQuery({
-    text: "📋 Riwayat WD segera hadir — backend pencairan menyusul.",
-    show_alert: true,
-  })
-);
+bot.callbackQuery("wd_set_payment", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  clearResellerInput(ctx.from.id);
+  awaitingWdPaymentMethod.add(ctx.from.id);
+  return ctx.reply(wdSetPaymentMethodText, { parse_mode: "Markdown", reply_markup: resellerBackKb });
+});
+
+bot.callbackQuery(/^wd_confirm:(\d+)$/, async (ctx) => {
+  const amount = Number(ctx.match[1]);
+  await ctx.answerCallbackQuery();
+  const r = await getResellerByTelegram(ctx.from.id);
+  if (!r?.bot_token) return ctx.reply("⚠️ Data reseller tidak ditemukan.");
+  if (!r.payment_method || !r.payment_info)
+    return ctx.reply("⚠️ Atur rekening tujuan dulu.", { reply_markup: resellerBackKb });
+  if (r.saldo_margin < amount)
+    return ctx.reply("⚠️ Saldo margin tidak cukup.", { reply_markup: resellerBackKb });
+  const deduct = await deductResellerMargin(r.id, amount);
+  if (!deduct.ok)
+    return ctx.reply("⚠️ Gagal memotong saldo margin. Coba lagi.", { reply_markup: resellerBackKb });
+  await insertWithdrawal(r.id, amount);
+  const updated = await getResellerByTelegram(ctx.from.id);
+  return ctx.editMessageText(
+    wdSuccessText(amount, updated?.saldo_margin ?? 0),
+    { parse_mode: "Markdown", reply_markup: resellerBackKb }
+  );
+});
+
+bot.callbackQuery("rm_rwd", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const r = await getResellerByTelegram(ctx.from.id);
+  if (!r?.bot_token)
+    return ctx.reply("⚠️ Buat bot reseller dulu lewat 👤 Reseller Bot.", { reply_markup: resellerPanelKb });
+  const total = await countWithdrawals(r.id);
+  const totalPages = Math.max(1, Math.ceil(total / WD_HISTORY_PAGE_SIZE));
+  const items = await getWithdrawalsPaged(r.id, WD_HISTORY_PAGE_SIZE, 0);
+  return ctx.editMessageText(
+    wdHistoryText(items, 1, totalPages),
+    { parse_mode: "Markdown", reply_markup: wdHistoryKb(1, totalPages) }
+  );
+});
+
+bot.callbackQuery(/^wd_hist:(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const r = await getResellerByTelegram(ctx.from.id);
+  if (!r) return;
+  const page = Number(ctx.match[1]);
+  const total = await countWithdrawals(r.id);
+  const totalPages = Math.max(1, Math.ceil(total / WD_HISTORY_PAGE_SIZE));
+  const offset = (page - 1) * WD_HISTORY_PAGE_SIZE;
+  const items = await getWithdrawalsPaged(r.id, WD_HISTORY_PAGE_SIZE, offset);
+  return ctx.editMessageText(
+    wdHistoryText(items, page, totalPages),
+    { parse_mode: "Markdown", reply_markup: wdHistoryKb(page, totalPages) }
+  );
+});
 
 bot.callbackQuery("tos", async (ctx) => {
   await ctx.answerCallbackQuery();
@@ -1497,6 +1571,57 @@ bot.on("message:text", async (ctx) => {
     } catch (e) {
       await ctx.reply(`Gagal menyimpan Contact CS: ${(e as Error).message}`);
     }
+    return;
+  }
+
+  if (awaitingWdPaymentMethod.has(id)) {
+    awaitingWdPaymentMethod.delete(id);
+    const method = ctx.message.text.trim();
+    if (method.length < 2 || method.length > 32) {
+      await ctx.reply("⚠️ Nama metode tidak valid. Contoh: `BCA`, `GoPay`. Kirim ulang.", { parse_mode: "Markdown", reply_markup: resellerBackKb });
+      return;
+    }
+    awaitingWdPaymentInfo.set(id, method);
+    await ctx.reply(wdSetPaymentInfoText(method), { parse_mode: "Markdown", reply_markup: resellerBackKb });
+    return;
+  }
+
+  if (awaitingWdPaymentInfo.has(id)) {
+    const method = awaitingWdPaymentInfo.get(id)!;
+    awaitingWdPaymentInfo.delete(id);
+    const info = ctx.message.text.trim();
+    if (info.length < 3 || info.length > 64) {
+      await ctx.reply("⚠️ Nomor rekening tidak valid (3-64 karakter). Kirim ulang.", { reply_markup: resellerBackKb });
+      return;
+    }
+    await updateResellerPayment(id, method, info);
+    await ctx.reply(`✅ Rekening disimpan: *${method}* — ${info}`, { parse_mode: "Markdown" });
+    const r = await getResellerByTelegram(id);
+    if (r) {
+      awaitingWdAmount.add(id);
+      await ctx.reply(wdRequestText(r.saldo_margin, method, info), { parse_mode: "Markdown", reply_markup: wdRequestKb });
+    }
+    return;
+  }
+
+  if (awaitingWdAmount.has(id)) {
+    awaitingWdAmount.delete(id);
+    const amount = Number(ctx.message.text.replace(/[^\d]/g, ""));
+    const r = await getResellerByTelegram(id);
+    if (!r) return;
+    if (!amount || amount <= 0) {
+      await ctx.reply("⚠️ Nominal tidak valid. Kirim angka, contoh: `50000`.", { parse_mode: "Markdown", reply_markup: resellerBackKb });
+      return;
+    }
+    if (amount > r.saldo_margin) {
+      await ctx.reply(`⚠️ Saldo margin tidak cukup (Rp ${r.saldo_margin.toLocaleString("id-ID")}).`, { reply_markup: resellerBackKb });
+      return;
+    }
+    if (!r.payment_method || !r.payment_info) {
+      await ctx.reply("⚠️ Atur rekening tujuan dulu.", { reply_markup: wdRequestKb });
+      return;
+    }
+    await ctx.reply(wdConfirmText(amount, r.payment_method, r.payment_info), { parse_mode: "Markdown", reply_markup: wdConfirmKb(amount) });
     return;
   }
 

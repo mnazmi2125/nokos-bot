@@ -12,6 +12,8 @@ export interface DbReseller {
   cs_contact: string | null;
   status: "PENDING" | "ACTIVE" | "STOPPED";
   saldo_margin: number;
+  payment_method: string | null;
+  payment_info: string | null;
   created_at: string;
 }
 
@@ -88,6 +90,30 @@ export async function setResellerStatus(
      WHERE u.telegram_id = ?`,
     [status, status, telegramId]
   );
+}
+
+export async function updateResellerPayment(
+  telegramId: number,
+  method: string,
+  info: string
+): Promise<void> {
+  await qExec(
+    `UPDATE tb_resellers r JOIN tb_users u ON u.id = r.user_id
+     SET r.payment_method = ?, r.payment_info = ?
+     WHERE u.telegram_id = ?`,
+    [method, info, telegramId]
+  );
+}
+
+export async function deductResellerMargin(
+  resellerId: number,
+  amount: number
+): Promise<{ ok: boolean }> {
+  const r = await qExec(
+    "UPDATE tb_resellers SET saldo_margin = saldo_margin - ? WHERE id = ? AND saldo_margin >= ?",
+    [amount, resellerId, amount]
+  );
+  return { ok: r.affectedRows > 0 };
 }
 
 export async function creditOrderMargin(

@@ -732,6 +732,93 @@ export function depositStatusText(status: "CANCELED" | "EXPIRED" | "FAILED"): st
 
 export const backToMenuKb = new InlineKeyboard().text("🏠 Menu Utama", "back_menu");
 
+// ── WITHDRAW RESELLER ──────────────────────────────────────────────────────
+
+export function wdRequestText(saldoMargin: number, paymentMethod: string | null, paymentInfo: string | null): string {
+  const rekening = paymentMethod && paymentInfo
+    ? `${paymentMethod} — ${paymentInfo}`
+    : "_Belum diatur_";
+  return `⬇️ *WITHDRAW SALDO MARGIN*
+
+🏦 Saldo Margin : Rp ${saldoMargin.toLocaleString("id-ID")}
+💳 Rekening     : ${rekening}
+
+Kirim nominal withdraw yang diinginkan (contoh: \`50000\`).
+Minimal Rp 0 (untuk testing).`;
+}
+
+export const wdRequestKb = new InlineKeyboard()
+  .text("✏️ Ubah Rekening", "wd_set_payment")
+  .row()
+  .text("⬅ Kembali", "reseller");
+
+export const wdSetPaymentMethodText =
+  "💳 *ATUR REKENING WITHDRAW*\n\nKirim nama metode pembayaran, contoh:\n`BCA`, `GoPay`, `Dana`, `OVO`, `BRI`";
+
+export function wdSetPaymentInfoText(method: string): string {
+  return `💳 *ATUR REKENING WITHDRAW*\n\nMetode: *${method}*\n\nKirim nomor rekening / nomor HP tujuan:`;
+}
+
+export function wdConfirmText(amount: number, method: string, info: string): string {
+  return `⬇️ *KONFIRMASI WITHDRAW*
+
+💰 Nominal  : Rp ${amount.toLocaleString("id-ID")}
+💳 Tujuan   : ${method} — ${info}
+
+Lanjutkan?`;
+}
+
+export function wdConfirmKb(amount: number): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Ya, Withdraw", `wd_confirm:${amount}`)
+    .row()
+    .text("⬅ Batal", "rm_withdraw");
+}
+
+export function wdSuccessText(amount: number, saldoAfter: number): string {
+  return `✅ *WITHDRAW BERHASIL DIAJUKAN*
+
+💰 Nominal  : Rp ${amount.toLocaleString("id-ID")}
+🏦 Sisa Margin : Rp ${saldoAfter.toLocaleString("id-ID")}
+
+Request Anda sudah masuk dengan status *PENDING*.
+Admin akan memproses dan mentransfer ke rekening Anda.`;
+}
+
+export const WD_HISTORY_PAGE_SIZE = 5;
+
+const WD_STATUS_LABEL: Record<string, { icon: string; label: string }> = {
+  PENDING:  { icon: "⏳", label: "Menunggu" },
+  APPROVED: { icon: "✅", label: "Disetujui" },
+  REJECTED: { icon: "❌", label: "Ditolak" },
+};
+
+export function wdHistoryText(
+  items: { id: number; amount: number; status: string; note: string | null; created_at: string }[],
+  page: number,
+  totalPages: number
+): string {
+  if (!items.length) return `📋 *RIWAYAT WITHDRAW*\n\nBelum ada riwayat withdraw.`;
+  const lines = items.map((w, i) => {
+    const s = WD_STATUS_LABEL[w.status] ?? { icon: "❔", label: w.status };
+    const note = w.note ? `\n   📝 ${w.note}` : "";
+    return `${i + 1 + (page - 1) * WD_HISTORY_PAGE_SIZE}. Rp ${w.amount.toLocaleString("id-ID")} — ${s.icon} ${s.label}${note}\n   🕐 ${fmtWibFull(w.created_at)}`;
+  });
+  return `📋 *RIWAYAT WITHDRAW* (Hal. ${page}/${totalPages})\n\n${lines.join("\n\n")}`;
+}
+
+export function wdHistoryKb(page: number, totalPages: number): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  if (totalPages > 1) {
+    if (page > 1) kb.text("◀️", `wd_hist:${page - 1}`);
+    kb.text(`${page}/${totalPages}`, "noop");
+    if (page < totalPages) kb.text("▶️", `wd_hist:${page + 1}`);
+    kb.row();
+  }
+  kb.text("⬅ Kembali", "reseller");
+  return kb;
+}
+
 export function menuText(
   name: string,
   id: number,

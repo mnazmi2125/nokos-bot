@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS tb_settings (
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS tb_withdrawals (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  reseller_id  BIGINT UNSIGNED NOT NULL,
+  amount       BIGINT NOT NULL,
+  status       ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  note         VARCHAR(255) NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_wd_reseller (reseller_id, status),
+  CONSTRAINT fk_wd_reseller FOREIGN KEY (reseller_id) REFERENCES tb_resellers (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT IGNORE INTO tb_settings (`key`, `value`) VALUES
   ('promo_channel', '@InfoNokosMochi'),
   ('cs_contact', '@CSNokos'),
