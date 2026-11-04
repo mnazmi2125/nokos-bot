@@ -657,7 +657,7 @@ bot.callbackQuery("rm_withdraw", async (ctx) => {
     return ctx.reply("⚠️ Buat bot reseller dulu lewat 👤 Reseller Bot.", { reply_markup: resellerPanelKb });
   if (await hasPendingWithdrawal(r.id))
     return ctx.answerCallbackQuery({
-      text: "⏳ Kamu masih memiliki withdraw yang sedang diproses (PENDING). Tunggu hingga Admin menyelesaikan request sebelumnya.",
+      text: "⏳ Ada withdraw pending, tunggu konfirmasi admin sebelum melanjutkan.",
       show_alert: true,
     });
   clearResellerInput(ctx.from.id);
