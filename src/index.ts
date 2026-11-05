@@ -1915,14 +1915,3 @@ void bot.api
   .then(() => console.log("[cmd] shortcut menu terpasang"))
   .catch((e) => console.error("[cmd] setMyCommands gagal:", e.message));
 
-  // Kirim pesan welcome saat bot mulai (hanya sekali per user baru)
-  const welcomeText = getWelcomeText();
-  const welcomeKb = startKeyboard();
-  try {
-    await bot.api.sendMessage(USER_START_WELCOME_CHAT_ID ?? 0, welcomeText, {
-      parse_mode: "HTML",
-      reply_markup: welcomeKb,
-    });
-  } catch {
-    // abaikan kalau gagal kirim (bisa user sudah start sebelum fitur ini)
-  }
