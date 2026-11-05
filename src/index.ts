@@ -1653,29 +1653,32 @@ bot.on("message:text", async (ctx) => {
   }
 
   if (awaitingWdAmount.has(id)) {
-    awaitingWdAmount.delete(id);
     const amount = Number(ctx.message.text.replace(/[^\d]/g, ""));
     const r = await getResellerByTelegram(id);
-    if (!r) return;
+    if (!r) {
+      awaitingWdAmount.delete(id);
+      return;
+    }
     if (!amount || amount <= 0) {
       await ctx.reply("⚠️ Nominal tidak valid. Kirim angka, contoh: `50000`.", { parse_mode: "Markdown", reply_markup: resellerBackKb });
-      return;
+      return; // state tetap aktif → user boleh ulangi input
     }
     if (amount < WITHDRAW_MIN) {
       await ctx.reply(
         `⚠️ Minimal withdraw Rp ${WITHDRAW_MIN.toLocaleString("id-ID")}.`,
         { reply_markup: resellerBackKb }
       );
-      return;
+      return; // state tetap aktif → user boleh ulangi input
     }
     if (amount > r.saldo_margin) {
       await ctx.reply(`⚠️ Saldo margin tidak cukup (Rp ${r.saldo_margin.toLocaleString("id-ID")}).`, { reply_markup: resellerBackKb });
-      return;
+      return; // state tetap aktif → user boleh ulangi input
     }
     if (!r.payment_method || !r.payment_info) {
       await ctx.reply("⚠️ Atur rekening tujuan dulu.", { reply_markup: wdRequestKb });
-      return;
+      return; // state tetap aktif → setelah atur rekening, langsung lanjut
     }
+    awaitingWdAmount.delete(id); // nominal lolos semua validasi → keluar dari mode input
     await ctx.reply(wdConfirmText(amount, r.payment_method, r.payment_info), { parse_mode: "Markdown", reply_markup: wdConfirmKb(amount) });
     return;
   }
