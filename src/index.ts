@@ -1915,3 +1915,7 @@ void bot.api
   .then(() => console.log("[cmd] shortcut menu terpasang"))
   .catch((e) => console.error("[cmd] setMyCommands gagal:", e.message));
 
+void warmup();
+startPoller(bot);
+bot.start();
+
