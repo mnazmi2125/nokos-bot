@@ -11,11 +11,12 @@ const BASE_URL = 'https://api.gobiz.co.id';
 const CLIENT_ID = 'go-biz-web-new';
 
 // Di-vendor dari https://github.com/kavionn/gobiz-payment (MIT License)
-// Dimodifikasi: path .env & cache mengacu ke root proyek (process.cwd()).
+// Dimodifikasi: path .env & cache mengacu ke root proyek.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
-const CACHE_FILE = path.join(process.cwd(), '.gopay_cache.json');
-const ENV_FILE   = path.join(process.cwd(), '.env');
+const PROJECT_ROOT = path.resolve(__dirname, '../../../../');
+const CACHE_FILE = path.join(PROJECT_ROOT, '.gopay_cache.json');
+const ENV_FILE   = path.join(PROJECT_ROOT, '.env');
 
 /**
  * Membaca file .env dan mengembalikan objek key-value.
