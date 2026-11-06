@@ -1916,6 +1916,6 @@ void bot.api
   .catch((e) => console.error("[cmd] setMyCommands gagal:", e.message));
 
 void warmup();
-startPoller(bot);
+startPoller(bot, OWNER_ID); // owner wajib diisi: bot utama → owner_id IS NULL, bot reseller → owner_id sendiri
 bot.start();
 
