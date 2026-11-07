@@ -851,7 +851,7 @@ ${now}
  *Balance Info :*
  *Balance :* Rp ${balance.toLocaleString("id-ID")}
  
- *Info Channel :* @InfoNokosHachi
+ *History OTP :* @InfoNokosHachi
 
  *Bot Stats :*
  *Total User :* ${totalUser.toLocaleString("id-ID")}
