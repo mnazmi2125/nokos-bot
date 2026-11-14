@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QRIS Provider — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html">🏪 Reseller</a></li>
+    <li><a href="orders.html">🧾 Order</a></li>
+    <li><a href="orders-reseller.html">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html">💰 Keuangan</a></li>
+    <li><a href="qris-provider.html" class="active">💳 QRIS Provider</a></li>
+    <li><a href="otp-provider.html">📱 OTP Provider</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="qris-provider">
+  <div class="toolbar"><div class="section-title">💳 Manajemen Provider QRIS</div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Provider</th><th>Status</th><th>Saldo Tersisa</th><th>Info</th></tr></thead>
+      <tbody>
+        <tr><td>Mayar</td><td><span class="badge ACTIVE">Aktif</span></td><td>-</td><td class="anchor">Pengaturan via .env / Settings</td></tr>
+        <tr><td>GoPay QRIS</td><td><span class="badge PENDING">Siap</span></td><td>-</td><td class="anchor">Pengaturan via .env / Settings</td></tr>
+        <tr><td>Tripay</td><td><span class="badge PENDING">Siap</span></td><td>-</td><td class="anchor">Pengaturan via .env / Settings</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="empty">Info saldo akan ditampilkan setelah kamu menambahkan kolom saldo di database dan mengisi API key di Settings.</div>
+</div>
+</main>
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>

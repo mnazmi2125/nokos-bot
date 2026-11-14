@@ -102,7 +102,7 @@ import {
   updateResellerPayment,
   deductResellerMargin,
 } from "./db/resellers.js";
-import { getSetting } from "./db/settings.js";
+import { getSetting, setSetting } from "./db/settings.js";
 import { ttlCache } from "./cache.js";
 import { newBatchId, insertOrder, countUserOrders, getUserOrdersPaged } from "./db/orders.js";
 import { insertWithdrawal, getWithdrawalsPaged, countWithdrawals, hasPendingWithdrawal } from "./db/withdrawals.js";
@@ -115,7 +115,7 @@ import {
   getUserDepositsPaged,
 } from "./db/deposits.js";
 import { getPgAdapter, DEPOSIT_EXPIRE_MIN } from "./pg/index.js";
-import { setOtpNotifier, deliverOtpCode } from "./pg/qris/gopay.js";
+import { setOtpNotifier, deliverOtpCode, gopayHealth } from "./pg/qris/gopay.js";
 import { qrPhotoSource } from "./pg/qr.js";
 import { startPoller, cancelOrderHandler, finishOrderHandler } from "./poller.js";
 
@@ -1917,5 +1917,26 @@ void bot.api
 
 void warmup();
 startPoller(bot, OWNER_ID); // owner wajib diisi: bot utama → owner_id IS NULL, bot reseller → owner_id sendiri
+
+// Heartbeat untuk panel (hanya bot utama): status hidup + status GoPay tiap 60 detik.
+// GoPay hanya diping bila ada deposit PENDING (tanpa itu feed tidak dibaca → tanpa side-effect OTP).
+if (OWNER_ID == null && process.env.DATABASE_URL) {
+  const hb = async () => {
+    try {
+      await setSetting("bot_heartbeat", new Date().toISOString());
+      if (process.env.PG_PROVIDER === "gopayqris") {
+        const r = await q1<{ c: number }>(
+          "SELECT COUNT(*) AS c FROM tb_deposits WHERE status='PENDING'"
+        );
+        if ((r?.c ?? 0) > 0) {
+          const h = await gopayHealth();
+          await setSetting("gopay_status", JSON.stringify(h));
+        }
+      }
+    } catch {}
+  };
+  void hb();
+  setInterval(() => void hb(), 60_000);
+}
 bot.start();
 

@@ -24,6 +24,7 @@ let feedCache: { at: number; items: GopayHistoryItem[] } | null = null;
 const warnedTx = new Set<string>();
 let lastLoginFailAt = 0;
 let cooldownWarnedAt = 0;
+let lastFeedError: { at: number; msg: string } | null = null; // untuk status panel
 let otpNotifier: ((msg: string) => Promise<void>) | null = null;
 let pendingOtp: { resolve: (code: string) => void; timer: ReturnType<typeof setTimeout> } | null = null;
 
@@ -91,9 +92,11 @@ async function getFeed(): Promise<GopayHistoryItem[]> {
     if (!res.status) throw new Error(res.message ?? "Gagal membaca feed transaksi GoPay");
     const items = res.data?.histories ?? [];
     feedCache = { at: Date.now(), items };
+    lastFeedError = null;
     return items;
   } catch (e) {
     const msg = (e as Error).message;
+    lastFeedError = { at: Date.now(), msg };
     if (/otp|login|verifikasi|kode/i.test(msg)) {
       lastLoginFailAt = Date.now(); // kegagalan login → jangan ulangi (cegah banjir OTP)
       if (otpNotifier)
@@ -101,6 +104,22 @@ async function getFeed(): Promise<GopayHistoryItem[]> {
     }
     throw e;
   }
+}
+
+/** Untuk panel: ping feed sekali → kembalikan waktu terakhir feed OK + error terakhir. */
+export async function gopayHealth(): Promise<{ lastFeedOk: string | null; lastError: string | null }> {
+  try {
+    await getFeed();
+    lastFeedError = null;
+  } catch (e) {
+    lastFeedError = { at: Date.now(), msg: (e as Error).message };
+  }
+  return {
+    lastFeedOk: feedCache ? new Date(feedCache.at).toISOString() : null,
+    lastError: lastFeedError
+      ? `${new Date(lastFeedError.at).toISOString()} — ${lastFeedError.msg}`
+      : null,
+  };
 }
 
 export class GopayQrAdapter implements PgAdapter {

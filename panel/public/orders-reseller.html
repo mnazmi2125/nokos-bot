@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Reseller — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html">🏪 Reseller</a></li>
+    <li><a href="orders.html">🧾 Order</a></li>
+    <li><a href="orders-reseller.html" class="active">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html">💰 Keuangan</a></li>
+    <li><a href="qris-provider.html">💳 QRIS Provider</a></li>
+    <li><a href="otp-provider.html">📱 OTP Provider</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="ordersReseller">
+  <div class="toolbar">
+    <div class="section-title">🤝 Order dari Bot Reseller</div>
+    <div class="search-box" style="margin-left:auto"><input id="qOrder" placeholder="Cari ID/nomor/layanan"></div>
+    <select id="fOrder" class="btn btn-outline" style="padding:4px 8px;font-size:0.8rem"><option value="">Semua status</option><option value="PENDING">Pending</option><option value="ACTIVE">Aktif</option><option value="OTP_RECEIVED">OTP Masuk</option><option value="COMPLETED">Selesai</option><option value="CANCELED">Dibatalkan</option><option value="EXPIRED">Kadaluarsa</option><option value="FAILED">Gagal</option></select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>User</th><th>Layanan</th><th>Nomor</th>
+        <th>Modal + Jual (Bot Utama)</th><th>Harga Jual Reseller</th><th>Margin</th>
+        <th>Status</th><th>OTP</th><th>Waktu</th>
+      </tr></thead>
+      <tbody id="tblOrders"></tbody>
+    </table>
+  </div>
+  <div class="toolbar">
+    <span class="anchor">Margin = Harga Jual Reseller − Harga Jual Bot Utama (per invoice)</span>
+    <span id="sumMargin" class="anchor" style="margin-left:auto"></span>
+  </div>
+</div>
+</main>
+</div>
+<script src="js/app.js"></script>
+<script>
+let orders = [];
+async function load() {
+  const q = document.getElementById("qOrder").value;
+  const st = document.getElementById("fOrder").value;
+  let url = "/orders?reseller=1";
+  if (q) url += "&q=" + encodeURIComponent(q);
+  if (st) url += "&status=" + st;
+  orders = await api(url) || [];
+  const tb = document.getElementById("tblOrders");
+  tb.innerHTML = orders.map(r => `
+    <tr>
+      <td>${r.first_name || r.username || "-"}</td>
+      <td>${r.service_name}</td>
+      <td class="id-mono">${r.phone_number || "-"}</td>
+      <td>${r.price_sell}</td>
+      <td>${r.price_reseller}</td>
+      <td style="color:${r.raw_margin > 0 ? "#10b981" : r.raw_margin < 0 ? "#ef4444" : "inherit"};font-weight:600">${r.margin}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="id-mono">${r.otp_code || "-"}</td>
+      <td>${fmtDate(r.created_at)}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="9" class="empty">Tidak ada order reseller.</td></tr>`;
+  const total = orders.reduce((s, r) => s + (r.raw_margin || 0), 0);
+  document.getElementById("sumMargin").textContent = "Total margin halaman ini: Rp " + total.toLocaleString("id-ID");
+}
+document.getElementById("qOrder").addEventListener("input", load);
+document.getElementById("fOrder").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>

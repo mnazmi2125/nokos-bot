@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reseller — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html" class="active">🏪 Reseller</a></li>
+    <li><a href="orders.html">🧾 Order</a></li>
+    <li><a href="orders-reseller.html">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html">💰 Keuangan</a></li>
+    <li><a href="qris-provider.html">💳 QRIS Provider</a></li>
+    <li><a href="otp-provider.html">📱 OTP Provider</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="resellers">
+  <div class="toolbar">
+    <div class="section-title">🏪 Kelola Reseller / Whitelabel</div>
+    <input type="text" id="q" placeholder="Cari bot username..." style="padding:6px 10px;width:240px">
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Bot Username</th><th>Bot Token</th><th>Margin</th><th>Saldo Margin</th><th>Contact CS</th><th>Status</th><th>Aksi</th><th>Daftar</th></tr></thead>
+      <tbody id="tblResellers"></tbody>
+    </table>
+  </div>
+  <div class="toolbar" style="justify-content:flex-end">
+    <span id="pageInfo" class="anchor"></span>
+    <button class="btn btn-sm btn-outline" id="btnPrev">◀ Sebelumnya</button>
+    <button class="btn btn-sm btn-outline" id="btnNext">Berikutnya ▶</button>
+  </div>
+</div>
+</main>
+</div>
+
+<!-- Modal edit reseller -->
+<div id="modalEdit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center">
+  <div style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:20px;width:400px;max-width:92vw">
+    <div class="section-title" id="mTitle">✏️ Edit Reseller</div>
+    <label>Bot Token Telegram (kolom: bot_token)</label>
+    <input type="text" id="mToken" placeholder="1234567890:AA..." style="width:100%;padding:6px 8px;margin-bottom:8px">
+    <label>Tipe Margin (kolom: margin_type)</label>
+    <select id="mType" style="width:100%;padding:6px 8px;margin-bottom:8px">
+      <option value="PCT">Persen (%) — pakai margin_pct</option>
+      <option value="AMOUNT">Nominal per no (Rp) — pakai margin_amount</option>
+    </select>
+    <div id="rowPct">
+      <label>Margin Persen % (kolom: margin_pct)</label>
+      <input type="number" id="mPct" min="0" placeholder="contoh: 5" style="width:100%;padding:6px 8px;margin-bottom:8px">
+    </div>
+    <div id="rowAmount">
+      <label>Margin per Nominal Rp/no (kolom: margin_amount)</label>
+      <input type="number" id="mAmount" min="0" placeholder="contoh: 100000" style="width:100%;padding:6px 8px;margin-bottom:8px">
+    </div>
+    <label>Saldo Margin Rp (kolom: saldo_margin)</label>
+    <input type="number" id="mSaldo" min="0" placeholder="0" style="width:100%;padding:6px 8px;margin-bottom:8px">
+    <label>Contact CS (kolom: cs_contact)</label>
+    <input type="text" id="mCs" placeholder="@username atau nomor" style="width:100%;padding:6px 8px;margin-bottom:12px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm btn-outline" onclick="closeModal()">Batal</button>
+      <button class="btn btn-sm btn-primary" id="mSave">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+const LIMIT = 20;
+let q = "", offset = 0, total = 0, rows = [];
+
+async function load() {
+  const d = await api(`/resellers?q=${encodeURIComponent(q)}&limit=${LIMIT}&offset=${offset}`);
+  if (!d) return;
+  total = d.total;
+  rows = d.items || [];
+  const tb = document.getElementById("tblResellers");
+  tb.innerHTML = rows.map(r => `
+    <tr>
+      <td class="id-mono">#${r.id}</td>
+      <td>${r.bot_username || "-"}</td>
+      <td class="id-mono">${r.bot_token ? r.bot_token.slice(0, 10) + "…" : "-"}</td>
+      <td>${r.margin_type === "AMOUNT" ? "Rp " + Number(r.raw_margin_amount).toLocaleString("id-ID") + "/no" : r.margin_pct + "%"}</td>
+      <td>${r.saldo_margin}</td>
+      <td>${r.cs_contact || "-"}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td style="white-space:nowrap">
+        <select onchange="chgStatus(${r.id}, this.value)" class="btn btn-sm btn-outline" style="padding:2px 6px">
+          <option value="PENDING" ${r.status==="PENDING"?"selected":""}>Pending</option>
+          <option value="ACTIVE" ${r.status==="ACTIVE"?"selected":""}>Aktif</option>
+          <option value="STOPPED" ${r.status==="STOPPED"?"selected":""}>Stopped</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="openEdit(${r.id})" style="padding:2px 8px">Edit</button>
+      </td>
+      <td class="anchor">${fmtDate(r.created_at)}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="9" class="empty">Tidak ada reseller cocok.</td></tr>`;
+  const from = total === 0 ? 0 : offset + 1;
+  const to = Math.min(offset + LIMIT, total);
+  document.getElementById("pageInfo").textContent = `${from}–${to} dari ${total} reseller`;
+  document.getElementById("btnPrev").disabled = offset === 0;
+  document.getElementById("btnNext").disabled = offset + LIMIT >= total;
+}
+
+async function chgStatus(id, val) {
+  if (!confirm("Ubah status reseller ini?")) { load(); return; }
+  await api("/resellers/" + id + "/status", { method: "PATCH", body: JSON.stringify({ status: val }) });
+  load();
+}
+
+function openEdit(id) {
+  const r = rows.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById("mTitle").textContent = "✏️ Edit #" + r.id + " — " + (r.bot_username || "");
+  document.getElementById("mToken").value = r.bot_token || "";
+  document.getElementById("mType").value = r.margin_type || "PCT";
+  document.getElementById("mPct").value = r.margin_pct;
+  document.getElementById("mAmount").value = r.raw_margin_amount;
+  document.getElementById("mSaldo").value = r.raw_saldo_margin;
+  document.getElementById("mCs").value = r.cs_contact || "";
+  toggleMargin();
+  document.getElementById("modalEdit").style.display = "flex";
+  document.getElementById("mSave").onclick = () => saveEdit(id);
+}
+function closeModal() { document.getElementById("modalEdit").style.display = "none"; }
+
+function toggleMargin() {
+  const t = document.getElementById("mType").value;
+  document.getElementById("rowPct").style.display = t === "PCT" ? "" : "none";
+  document.getElementById("rowAmount").style.display = t === "AMOUNT" ? "" : "none";
+}
+document.getElementById("mType").addEventListener("change", toggleMargin);
+
+async function saveEdit(id) {
+  const body = {
+    bot_token: document.getElementById("mToken").value.trim(),
+    margin_type: document.getElementById("mType").value,
+    margin_pct: Number(document.getElementById("mPct").value),
+    margin_amount: Number(document.getElementById("mAmount").value),
+    saldo_margin: Number(document.getElementById("mSaldo").value),
+    cs_contact: document.getElementById("mCs").value.trim(),
+  };
+  if (isNaN(body.margin_pct) || isNaN(body.margin_amount) || isNaN(body.saldo_margin)) return alert("Isi angka dengan benar.");
+  if (!confirm("Simpan perubahan reseller #" + id + "?")) return;
+  const r = await api("/resellers/" + id, { method: "PATCH", body: JSON.stringify(body) });
+  if (r && r.ok) { closeModal(); load(); }
+}
+
+let debounce;
+document.getElementById("q").addEventListener("input", (e) => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { q = e.target.value.trim(); offset = 0; load(); }, 400);
+});
+document.getElementById("btnPrev").addEventListener("click", () => { offset = Math.max(0, offset - LIMIT); load(); });
+document.getElementById("btnNext").addEventListener("click", () => { offset += LIMIT; load(); });
+
+load();
+</script>
+</body>
+</html>

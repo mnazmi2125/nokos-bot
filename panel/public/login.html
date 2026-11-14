@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Masuk — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+</style>
+</head>
+<body>
+<div class="form-card form-wrap">
+  <h2>🔐 Masuk ke Panel</h2>
+  <div id="msg" class="msg error" style="display:none"></div>
+  <form id="frmLogin">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="user" required placeholder="admin">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="pass" required placeholder="••••••••">
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100">Masuk</button>
+  </form>
+  <p style="margin-top:14px;font-size:0.82rem;color:var(--muted);text-align:center">
+    Panel manajemen Nokos Bot · <a href="/">kembali</a>
+  </p>
+</div>
+<script src="js/app.js"></script>
+<script>
+document.getElementById("frmLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const msg = document.getElementById("msg");
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: fd.get("user"), pass: fd.get("pass") })
+    });
+    const d = await res.json();
+    if (d.ok) location.href = "/dashboard.html";
+    else { msg.textContent = d.error || "gagal masuk"; msg.style.display = "block"; }
+  } catch (err) { msg.textContent = "terjadi kesalahan jaringan"; msg.style.display = "block"; }
+});
+</script>
+</body>
+</html>

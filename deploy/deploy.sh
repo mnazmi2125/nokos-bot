@@ -32,6 +32,7 @@ fi
 
 npx pm2 reload nokos-bot --update-env || npx pm2 start npm --name nokos-bot --max-memory-restart 250M -- run start
 npx pm2 reload nokos-reseller --update-env || npx pm2 start npm --name nokos-reseller --max-memory-restart 300M -- run reseller
+npx pm2 reload nokos-panel --update-env || npx pm2 start npm --name nokos-panel --max-memory-restart 200M -- run panel
 npx pm2 save --force >/dev/null 2>&1 || true
 
 echo "[deploy] selesai ✓"

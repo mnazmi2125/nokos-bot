@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keuangan — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html">🏪 Reseller</a></li>
+    <li><a href="orders.html">🧾 Order</a></li>
+    <li><a href="orders-reseller.html">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html" class="active">💰 Keuangan</a></li>
+    <li><a href="qris-provider.html">💳 QRIS Provider</a></li>
+    <li><a href="otp-provider.html">📱 OTP Provider</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="keuangan">
+  <div class="toolbar"><div class="section-title">💰 Ringkasan Keuangan</div></div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="label">Total Deposit Terbayar</div><div class="value up" id="kTotalDeposit">-</div></div>
+    <div class="stat-card"><div class="label">Total Penjualan (Order Selesai)</div><div class="value up" id="kTotalRevenue">-</div></div>
+    <div class="stat-card"><div class="label">Keuntungan Bersih (Margin)</div><div class="value up" id="kTotalProfit">-</div></div>
+    <div class="stat-card"><div class="label">Total Withdraw Disetujui</div><div class="value down" id="kTotalWithdrawn">-</div></div>
+    <div class="stat-card"><div class="label">Withdraw Pending</div><div class="value down" id="kPendingWithdrawal">-</div></div>
+    <div class="stat-card"><div class="label">Order Selesai</div><div class="value" id="kTotalOrders">-</div></div>
+  </div>
+  <div class="section-title" style="margin-top:20px">📋 Transaksi Terkini</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Tanggal</th><th>Tipe</th><th>Jumlah</th><th>Status</th><th>Referensi</th></tr></thead>
+      <tbody id="tblFinance"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="financeEmpty" style="display:none">Belum ada data keuangan.</div>
+</div>
+</main>
+</div>
+<script src="js/app.js"></script>
+<script>
+(async () => {
+  const s = await api("/finance/summary");
+  if (!s) return;
+  document.getElementById("kTotalDeposit").textContent = s.totalDeposit;
+  document.getElementById("kTotalRevenue").textContent = s.totalRevenue;
+  document.getElementById("kTotalProfit").textContent = s.totalProfit;
+  document.getElementById("kTotalWithdrawn").textContent = s.totalWithdrawn;
+  document.getElementById("kPendingWithdrawal").textContent = s.pendingWithdrawal;
+  document.getElementById("kTotalOrders").textContent = s.totalOrders;
+
+  const dep = await api("/deposits?limit=5") || [];
+  const ord = await api("/orders?limit=5") || [];
+  const rows = [];
+  dep.forEach(d => rows.push({ t: d.created_at, type: "Deposit", amt: d.amount, st: d.status, ref: d.external_id }));
+  ord.forEach(o => rows.push({ t: o.created_at, type: "Order", amt: o.price_sell, st: o.status, ref: `#${o.id}` }));
+  rows.sort((a,b) => new Date(b.t) - new Date(a.t));
+  const tb = document.getElementById("tblFinance");
+  const top = rows.slice(0,5);
+  tb.innerHTML = top.map(r => `
+    <tr>
+      <td>${fmtDate(r.t)}</td>
+      <td>${r.type}</td>
+      <td>${r.amt}</td>
+      <td>${statusBadge(r.st)}</td>
+      <td class="id-mono">${r.ref}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="5" class="empty">Belum ada transaksi.</td></tr>`;
+  document.getElementById("financeEmpty").style.display = top.length ? "none" : "block";
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html">🏪 Reseller</a></li>
+    <li><a href="orders.html" class="active">🧾 Order</a></li>
+    <li><a href="orders-reseller.html">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html">💰 Keuangan</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="orders">
+  <div class="toolbar">
+    <div class="section-title">🧾 Kelola Order</div>
+    <div class="search-box" style="margin-left:auto"><input id="qOrder" placeholder="Cari ID/nomor/layanan"></div>
+    <select id="fOrder" class="btn btn-outline" style="padding:4px 8px;font-size:0.8rem"><option value="">Semua status</option><option value="PENDING">Pending</option><option value="ACTIVE">Aktif</option><option value="OTP_RECEIVED">OTP Masuk</option><option value="COMPLETED">Selesai</option><option value="CANCELED">Dibatalkan</option><option value="EXPIRED">Kadaluarsa</option><option value="FAILED">Gagal</option></select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>User</th><th>Layanan</th><th>Nomor</th><th>Modal</th><th>Jual</th><th>Reseller</th><th>Status</th><th>OTP</th><th>Waktu</th><th>Aksi</th></tr></thead>
+      <tbody id="tblOrders"></tbody>
+    </table>
+  </div>
+</div>
+</main>
+</div>
+<script src="js/app.js"></script>
+<script>
+let orders = [];
+async function load() {
+  const q = document.getElementById("qOrder").value;
+  const st = document.getElementById("fOrder").value;
+  const url = "/orders" + (q ? "?q=" + encodeURIComponent(q) : "") + (st ? (q ? "&" : "?") + "status=" + st : "");
+  orders = await api(url) || [];
+  const tb = document.getElementById("tblOrders");
+  tb.innerHTML = orders.map(r => `
+    <tr>
+      <td>${r.first_name || r.username || "-"}</td>
+      <td>${r.service_name}</td>
+      <td class="id-mono">${r.phone_number || "-"}</td>
+      <td>${r.price_modal}</td>
+      <td>${r.price_sell}</td>
+      <td>${r.reseller_username || '<span class="anchor">Bot Utama</span>'}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="id-mono">${r.otp_code || "-"}</td>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>
+        <select onchange="chg(${r.id}, this.value)" class="btn btn-sm btn-outline" style="padding:2px 6px">
+          <option value="PENDING" ${r.status==="PENDING"?"selected":""}>Pending</option>
+          <option value="ACTIVE" ${r.status==="ACTIVE"?"selected":""}>Aktif</option>
+          <option value="OTP_RECEIVED" ${r.status==="OTP_RECEIVED"?"selected":""}>OTP Masuk</option>
+          <option value="COMPLETED" ${r.status==="COMPLETED"?"selected":""}>Selesai</option>
+          <option value="CANCELED" ${r.status==="CANCELED"?"selected":""}>Batal</option>
+          <option value="EXPIRED" ${r.status==="EXPIRED"?"selected":""}>Kadaluarsa</option>
+          <option value="FAILED" ${r.status==="FAILED"?"selected":""}>Gagal</option>
+        </select>
+      </td>
+    </tr>
+  `).join("") || `<tr><td colspan="10" class="empty">Tidak ada order.</td></tr>`;
+}
+async function chg(id, val) { await api("/orders/" + id + "/status", { method: "PATCH", body: JSON.stringify({ status: val }) }); load(); }
+document.getElementById("qOrder").addEventListener("input", load);
+document.getElementById("fOrder").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>

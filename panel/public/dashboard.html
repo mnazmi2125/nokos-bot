@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Nokos Panel</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="brand"><div class="dot"></div> Nokos <b>Panel</b></div>
+  
+  <div class="userbox"><span id="userinfo">Admin</span> <button class="btn-logout" id="btnLogout">Keluar</button></div>
+</div>
+<div class="wrap">
+<aside>
+  <div class="nav-title">Menu</div>
+  <ul>
+    <li><a href="dashboard.html" class="active">📊 Dashboard</a></li>
+    <li><a href="users.html">👥 Users</a></li>
+    <li><a href="resellers.html">🏪 Reseller</a></li>
+    <li><a href="orders.html">🧾 Order</a></li>
+    <li><a href="orders-reseller.html">🤝 Order (Reseller)</a></li>
+    <li><a href="deposits.html">💳 Deposit</a></li>
+    <li><a href="withdrawals.html">🏧 Withdraw</a></li>
+    <li><a href="settings.html">⚙️ Settings</a></li>
+    <li><a href="keuangan.html">💰 Keuangan</a></li>
+    <li><a href="qris-provider.html">💳 QRIS Provider</a></li>
+    <li><a href="otp-provider.html">📱 OTP Provider</a></li>
+  </ul>
+</aside>
+<main>
+<div class="page active" id="dashboard">
+  <div class="toolbar"><div class="section-title">📊 Ringkasan</div></div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="label">Total User</div><div class="value" id="sTotalUsers">-</div></div>
+    <div class="stat-card"><div class="label">Total Order</div><div class="value" id="sTotalOrders">-</div></div>
+    <div class="stat-card"><div class="label">Order Pending</div><div class="value down" id="sPendingOrders">-</div></div>
+    <div class="stat-card"><div class="label">Deposit Terbayar</div><div class="value up" id="sTotalDeposit">-</div></div>
+    <div class="stat-card"><div class="label">Deposit Pending</div><div class="value down" id="sPendingDeposit">-</div></div>
+    <div class="stat-card"><div class="label">Withdraw Pending</div><div class="value down" id="sPendingWD">-</div></div>
+    <div class="stat-card"><div class="label">Withdraw Disetujui</div><div class="value up" id="sTotalWD">-</div></div>
+  </div>
+  <div class="section-title" style="margin-top:10px">🖥️ Status Sistem</div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="label">Bot Utama</div><div class="value" id="sBot">-</div><div class="label" id="sBotInfo"></div></div>
+    <div class="stat-card"><div class="label">Engine Reseller</div><div class="value" id="sEngine">-</div><div class="label" id="sEngineInfo"></div></div>
+    <div class="stat-card"><div class="label">Token GoPay</div><div class="value" id="sGopay">-</div><div class="label" id="sGopayInfo"></div></div>
+    <div class="stat-card"><div class="label">Saldo Provider OTP</div><div class="value" id="sProv">-</div><div class="label" id="sProvInfo"></div></div>
+  </div>
+  <div class="section-title" style="margin-top:10px">⚠️ Alert</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Level</th><th>Pesan</th><th>Waktu</th></tr></thead>
+      <tbody id="tblAlerts"></tbody>
+    </table>
+  </div>
+  <div class="section-title" style="margin-top:10px">🕒 Order Terbaru</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Layanan</th><th>Negara</th><th>Harga</th><th>Status</th><th>Waktu</th><th>User</th></tr></thead>
+      <tbody id="tblRecent"></tbody>
+    </table>
+  </div>
+</div>
+</main>
+</div>
+<script src="js/app.js"></script>
+<script>
+(async () => {
+  const d = await api("/stats");
+  if (!d) return;
+  document.getElementById("sTotalUsers").textContent = d.totalUsers;
+  document.getElementById("sTotalOrders").textContent = d.totalOrders;
+  document.getElementById("sPendingOrders").textContent = d.pendingOrders;
+  document.getElementById("sTotalDeposit").textContent = d.totalDeposit;
+  document.getElementById("sPendingDeposit").textContent = d.pendingDeposit;
+  document.getElementById("sPendingWD").textContent = d.pendingWD;
+  document.getElementById("sTotalWD").textContent = d.totalWD;
+  const tb = document.getElementById("tblRecent");
+  tb.innerHTML = (d.recent || []).map(r => `
+    <tr>
+      <td class="id-mono">#${r.id}</td>
+      <td>${r.service_name}</td>
+      <td>${r.country_emoji || ""} ${r.country_name}</td>
+      <td>${r.price_sell}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${fmtDate(r.created_at)}</td>
+      <td class="id-mono">${r.username || r.telegram_id}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="7" class="empty">Belum ada order.</td></tr>`;
+
+  // ── Status sistem + saldo provider + alert ──
+  const ago = (iso) => {
+    if (!iso) return "-";
+    const t = new Date(iso).getTime();
+    if (isNaN(t)) return "-";
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + " dtk lalu";
+    if (s < 3600) return Math.round(s / 60) + " mnt lalu";
+    if (s < 86400) return Math.round(s / 3600) + " jam lalu";
+    return Math.round(s / 86400) + " hari lalu";
+  };
+  const fresh = (iso, maxSec) => iso && (Date.now() - new Date(iso).getTime()) / 1000 < maxSec;
+
+  try {
+    const sys = await api("/system");
+    if (sys) {
+      const botOk = fresh(sys.botHeartbeat, 180);
+      document.getElementById("sBot").textContent = botOk ? "🟢 Online" : "🔴 Offline";
+      document.getElementById("sBotInfo").textContent = "terakhir " + ago(sys.botHeartbeat);
+      const engOk = fresh(sys.engine && sys.engine.at, 90);
+      document.getElementById("sEngine").textContent = engOk ? "🟢 Online" : "🔴 Offline";
+      document.getElementById("sEngineInfo").textContent = engOk
+        ? (sys.engine.bots ?? 0) + " bot aktif"
+        : "terakhir " + ago(sys.engine && sys.engine.at);
+      const g = sys.gopay;
+      const errAt = g && g.lastError ? new Date(g.lastError.slice(0, 24)).getTime() : 0;
+      const okAt = g && g.lastFeedOk ? new Date(g.lastFeedOk).getTime() : 0;
+      const el = document.getElementById("sGopay");
+      const info = document.getElementById("sGopayInfo");
+      if (errAt > okAt) { el.textContent = "🔴 Bermasalah"; info.textContent = (g.lastError || "").split(" — ")[1] || ago(g.lastError); }
+      else if (okAt) { el.textContent = "🟢 OK"; info.textContent = "feed " + ago(g.lastFeedOk); }
+      else { el.textContent = "⏸ Belum dibaca"; info.textContent = "akan terisi saat ada deposit"; }
+    }
+  } catch {}
+
+  try {
+    const b = await api("/provider/balance");
+    if (b && b.balance != null) {
+      document.getElementById("sProv").textContent = b.balance.toLocaleString("id-ID") + " " + (b.currency || "");
+      document.getElementById("sProvInfo").textContent = "live dari API provider";
+    } else {
+      document.getElementById("sProv").textContent = "-";
+      document.getElementById("sProvInfo").textContent = "API provider belum aktif";
+    }
+  } catch { document.getElementById("sProvInfo").textContent = "gagal memuat"; }
+
+  try {
+    const alerts = await api("/alerts");
+    const badge = { warn: '<span class="badge PENDING">PERINGATAN</span>', error: '<span class="badge FAILED">KRITIS</span>', info: '<span class="badge ACTIVE">INFO</span>' };
+    document.getElementById("tblAlerts").innerHTML = (alerts || []).map(a => `
+      <tr>
+        <td>${badge[a.level] || a.level}</td>
+        <td>${a.text}</td>
+        <td>${a.at ? fmtDate(a.at) : "-"}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="3" class="empty">🟢 Tidak ada alert — semua normal.</td></tr>`;
+  } catch {}
+})();
+</script>
+</body>
+</html>
