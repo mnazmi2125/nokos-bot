@@ -77,6 +77,7 @@ import {
   DEPOSIT_MIN,
   DEPOSIT_MAX,
 } from "./ui.js";
+import { orderServiceList } from "./config/top-services.js";
 import {
   getServices,
   getCountries,
@@ -802,7 +803,7 @@ bot.callbackQuery("srv:1", async (ctx) => {
     const services = await loadServices();
     const msg = ctx.callbackQuery.message;
     userView.set(ctx.from.id, {
-      list: services.map((s) => ({ id: s.id, name: s.name })),
+      list: orderServiceList(services.map((s) => ({ id: s.id, name: s.name }))),
       page: 1,
       chatId: msg?.chat.id ?? ctx.from.id,
       msgId: msg?.message_id ?? 0,
@@ -1734,7 +1735,7 @@ bot.on("message:text", async (ctx) => {
 bot.callbackQuery("svc:back_all", async (ctx) => {
   const view = userView.get(ctx.from.id);
   if (!view) return ctx.answerCallbackQuery({ text: "Buka ulang menu Order OTP" });
-  view.list = (await loadServices()).map((s) => ({ id: s.id, name: s.name }));
+  view.list = orderServiceList((await loadServices()).map((s) => ({ id: s.id, name: s.name })));
   view.page = 1;
   view.query = undefined;
   await ctx
