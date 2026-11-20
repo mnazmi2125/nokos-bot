@@ -189,12 +189,55 @@ app.patch("/api/withdrawals/:id/status", requireAuth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/api/settings", requireAuth, async (req, res) => {
-  try { const rows = await query("SELECT `key`,`value` FROM tb_settings ORDER BY `key`"); res.json(rows); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+// ── Tier harga (tb_price_tiers) — dipakai bot via src/pricing.ts (cache 60 dtk) ──
+app.get("/api/tiers", requireAuth, async (req, res) => {
+  try {
+    const rows = await query(
+      "SELECT id,server,name,min_price,max_price,multiplier,min_profit,active,updated_at FROM tb_price_tiers ORDER BY server ASC, min_price ASC"
+    );
+    res.json(rows.map(r => ({ ...r, multiplier: Number(r.multiplier), max_price: r.max_price == null ? null : Number(r.max_price) })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put("/api/settings/:key", requireAuth, async (req, res) => {
-  try { await query("INSERT INTO tb_settings (`key`,`value`) VALUES (?,?) ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)", [req.params.key, req.body.value ?? null]); res.json({ ok: true }); }
+function validTier(b) {
+  const name = String(b.name ?? "").trim();
+  const min = parseInt(b.min_price);
+  const max = b.max_price === "" || b.max_price === null || b.max_price === undefined ? null : parseInt(b.max_price);
+  const mult = Number(b.multiplier);
+  const profit = parseInt(b.min_profit ?? 0);
+  if (!name) return { error: "Nama tier wajib diisi" };
+  if (isNaN(min) || min < 1) return { error: "Harga minimal harus angka ≥ 1" };
+  if (max !== null && (isNaN(max) || max < min)) return { error: "Harga maksimal harus kosong atau ≥ minimal" };
+  if (isNaN(mult) || mult <= 0) return { error: "Multiplier harus angka > 0 (contoh: 1.5)" };
+  if (isNaN(profit) || profit < 0) return { error: "Minimal profit tidak valid" };
+  return { name, min, max, mult, profit };
+}
+app.post("/api/tiers", requireAuth, async (req, res) => {
+  try {
+    const v = validTier(req.body);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const server = String(req.body.server ?? "server1").trim() || "server1";
+    await query(
+      "INSERT INTO tb_price_tiers (server,name,min_price,max_price,multiplier,min_profit,active) VALUES (?,?,?,?,?,?,1)",
+      [server, v.name, v.min, v.max, v.mult, v.profit]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.put("/api/tiers/:id", requireAuth, async (req, res) => {
+  try {
+    const v = validTier(req.body);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const active = req.body.active === undefined ? undefined : (Number(req.body.active) ? 1 : 0);
+    const sets = ["name=?", "min_price=?", "max_price=?", "multiplier=?", "min_profit=?"];
+    const p = [v.name, v.min, v.max, v.mult, v.profit];
+    if (active !== undefined) { sets.push("active=?"); p.push(active); }
+    p.push(req.params.id);
+    await query(`UPDATE tb_price_tiers SET ${sets.join(", ")} WHERE id=?`, p);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete("/api/tiers/:id", requireAuth, async (req, res) => {
+  try { await query("DELETE FROM tb_price_tiers WHERE id=?", [req.params.id]); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

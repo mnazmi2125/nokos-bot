@@ -90,7 +90,7 @@ import {
   SmsProduct,
 } from "./providers/smscode/catalog.js";
 import { createOrder } from "./providers/smscode/orders.js";
-import { calcPrice } from "./pricing.js";
+import { calcPrice, loadTiers } from "./pricing.js";
 import { getOrCreateUser, changeBalance } from "./db/users.js";
 import { q1 } from "./db/index.js";
 import {
@@ -1005,10 +1005,11 @@ async function loadPrices(
       rs = null;
     }
   }
+  const tiers = await loadTiers("server1"); // tier dari tb_price_tiers (edit via panel)
   return products
     .filter((p) => p.active && p.available > 0)
     .map((p) => {
-      const calc = calcPrice(p.price, "server1");
+      const calc = calcPrice(p.price, tiers);
       const margin = !rs
         ? 0
         : rs.margin_type === "AMOUNT"
