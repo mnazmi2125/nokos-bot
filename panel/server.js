@@ -18,6 +18,7 @@ const pool = mysql.createPool({ uri: process.env.DATABASE_URL, connectionLimit: 
 app.use(express.json());
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); }); // cegah browser memuat file versi lama
 app.use(express.static(join(__dirname, "public")));
+app.get("/", (req, res) => res.redirect("/login.html")); // ketik IP saja → langsung ke login
 app.use(session({ secret: process.env.SESSION_SECRET, resave: false, saveUninitialized: false, cookie: { httpOnly: true, sameSite: "lax", maxAge: 1000 * 60 * 60 * 8 } }));
 
 async function query(sql, params = []) { const [rows] = await pool.execute(sql, params); return rows; }
